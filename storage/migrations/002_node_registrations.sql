@@ -1,0 +1,26 @@
+-- Arowin: node registrations (USDT portal signup)
+CREATE TABLE IF NOT EXISTS `node_registrations` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `full_name` VARCHAR(150) NOT NULL,
+  `email` VARCHAR(190) NOT NULL,
+  `phone` VARCHAR(40) NOT NULL,
+  `username` VARCHAR(60) NOT NULL,
+  `password_hash` VARCHAR(255) NOT NULL,
+  `sponsor_id` VARCHAR(60) DEFAULT NULL,
+  `preferred_leg` ENUM('left','right','auto') NOT NULL DEFAULT 'auto',
+  `node_package` ENUM('50','150','350','750','1550','3150','6350','12750') NULL DEFAULT NULL,
+  `usdt_wallet` VARCHAR(120) DEFAULT NULL,
+  `country` VARCHAR(80) DEFAULT NULL,
+  `consent` TINYINT(1) NOT NULL DEFAULT 0,
+  `status` ENUM('pending','active','rejected') NOT NULL DEFAULT 'pending',
+  `ip_address` VARCHAR(45) DEFAULT NULL,
+  `user_agent` VARCHAR(255) DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_reg_email` (`email`),
+  UNIQUE KEY `uq_reg_username` (`username`),
+  KEY `idx_reg_status` (`status`),
+  KEY `idx_reg_sponsor` (`sponsor_id`),
+  KEY `idx_reg_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

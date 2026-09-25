@@ -1,0 +1,105 @@
+/* PPT View — inline document viewer */
+.ppt-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.ppt-eyebrow {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent, #ff8c1a);
+}
+.ppt-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  max-width: 36rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ppt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.ppt-btn {
+  border: 1px solid var(--border, #262626);
+  background: #141414;
+  color: var(--text-primary, #f1f1f1);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+}
+.ppt-btn.primary {
+  background: var(--accent, #ff8c1a);
+  border-color: var(--accent, #ff8c1a);
+  color: #0a0a0a;
+}
+.ppt-stage {
+  position: relative;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 140, 26, 0.28);
+  background: #0d0d0d;
+  overflow: hidden;
+  outline: none;
+}
+.ppt-stage--embed {
+  height: min(72vh, 820px);
+  min-height: 420px;
+}
+.ppt-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #111;
+}
+.ppt-empty {
+  border-radius: 16px;
+  border: 1px dashed rgba(255, 140, 26, 0.35);
+  background: rgba(255, 140, 26, 0.04);
+  padding: 48px 24px;
+  text-align: center;
+}
+.ppt-empty-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 800;
+}
+.ppt-empty-body {
+  margin: 0;
+  color: var(--text-muted, #9ca3af);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ppt-stage:fullscreen,
+.ppt-stage:-webkit-full-screen {
+  height: 100vh;
+  min-height: 100vh;
+  border-radius: 0;
+  border: 0;
+}
+
+@media (max-width: 640px) {
+  .ppt-title {
+    font-size: 18px;
+    white-space: normal;
+  }
+  .ppt-stage--embed {
+    height: min(70vh, 560px);
+    min-height: 320px;
+  }
+}

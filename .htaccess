@@ -1,0 +1,199 @@
+# Arowin Trading Portal — performance + SEO + security
+# Requires: mod_rewrite, mod_headers, mod_deflate, mod_expires
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /arowin/
+
+  # HTTPS: enable when the live certificate is active (or rely on bootstrap APP_URL https redirect)
+  # RewriteCond %{HTTPS} !=on
+  # RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
+  # RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  # Canonical: strip index.php
+  RewriteCond %{THE_REQUEST} /index\.php[\s?] [NC]
+  RewriteRule ^index\.php$ ./ [R=301,L]
+
+  # Dynamic SEO endpoints
+  RewriteRule ^robots\.txt$ robots.php [L]
+  RewriteRule ^sitemap\.xml$ sitemap.php [L]
+  RewriteRule ^sitemap-([a-z0-9\-]+)\.xml$ sitemap-child.php?type=$1 [L,QSA]
+
+  # CMS modules
+  RewriteRule ^blog/?$ public/cms/index.php?type=blog [L,QSA]
+  RewriteRule ^blog/([A-Za-z0-9\-]+)/?$ public/cms/view.php?type=blog&slug=$1 [L,QSA]
+  RewriteRule ^news/?$ public/cms/index.php?type=news [L,QSA]
+  RewriteRule ^news/([A-Za-z0-9\-]+)/?$ public/cms/view.php?type=news&slug=$1 [L,QSA]
+  RewriteRule ^products/?$ public/cms/index.php?type=product [L,QSA]
+  RewriteRule ^products/([A-Za-z0-9\-]+)/?$ public/cms/view.php?type=product&slug=$1 [L,QSA]
+  RewriteRule ^events/?$ public/cms/index.php?type=event [L,QSA]
+  RewriteRule ^events/([A-Za-z0-9\-]+)/?$ public/cms/view.php?type=event&slug=$1 [L,QSA]
+  RewriteRule ^gallery/?$ public/cms/index.php?type=gallery [L,QSA]
+  RewriteRule ^gallery/([A-Za-z0-9\-]+)/?$ public/cms/view.php?type=gallery&slug=$1 [L,QSA]
+  RewriteRule ^videos/?$ public/cms/index.php?type=video [L,QSA]
+  RewriteRule ^videos/([A-Za-z0-9\-]+)/?$ public/cms/view.php?type=video&slug=$1 [L,QSA]
+  RewriteRule ^downloads/?$ public/cms/index.php?type=download [L,QSA]
+  RewriteRule ^downloads/([A-Za-z0-9\-]+)/?$ public/cms/view.php?type=download&slug=$1 [L,QSA]
+  RewriteRule ^search/?$ public/pages/search.php [L,QSA]
+
+  # Pretty URLs → public pages
+  RewriteRule ^about/?$ public/pages/about.php [L,QSA]
+  RewriteRule ^careers/?$ public/pages/careers.php [L,QSA]
+  RewriteRule ^contact/?$ public/pages/contact.php [L,QSA]
+  RewriteRule ^register/?$ public/pages/register.php [L,QSA]
+  RewriteRule ^login/?$ public/pages/login.php [L,QSA]
+  RewriteRule ^forgot-password/?$ public/pages/forgot-password.php [L,QSA]
+  RewriteRule ^welcome-login/?$ public/pages/welcome-login.php [L,QSA]
+  RewriteRule ^logout/?$ public/pages/logout.php [L,QSA]
+  RewriteRule ^offline/?$ public/pages/offline.php [L,QSA]
+  # Admin (trailing-slash URLs; keep POST body on login)
+  RewriteRule ^admin$ admin/ [R=307,L]
+  RewriteRule ^admin/$ admin/index.php [L,QSA]
+  RewriteRule ^admin/login/?$ admin/login.php [L,QSA]
+  RewriteRule ^admin/logout/?$ admin/logout.php [L,QSA]
+  RewriteRule ^admin/purchases/?$ admin/purchases.php [L,QSA]
+  RewriteRule ^admin/dashboard/?$ admin/dashboard/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/purchases/?$ admin/dashboard/purchases/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/users/?$ admin/dashboard/users/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/users/login-as/?$ admin/dashboard/users/login-as.php [L,QSA]
+  RewriteRule ^admin/dashboard/users/exit-impersonation/?$ admin/dashboard/users/exit-impersonation.php [L,QSA]
+  RewriteRule ^admin/dashboard/settings/?$ admin/dashboard/settings/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/seo/?$ admin/dashboard/seo/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/seo/pages/?$ admin/dashboard/seo/pages.php [L,QSA]
+  RewriteRule ^admin/dashboard/seo/redirects/?$ admin/dashboard/seo/redirects.php [L,QSA]
+  RewriteRule ^admin/dashboard/cms/?$ admin/dashboard/cms/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/cms/edit/?$ admin/dashboard/cms/edit.php [L,QSA]
+  RewriteRule ^admin/dashboard/earners/?$ admin/dashboard/earners/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/withdrawals/?$ admin/dashboard/withdrawals/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/deposits/?$ admin/dashboard/deposits/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/transfers/?$ admin/dashboard/transfers/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/turnover/?$ admin/dashboard/turnover/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/distribute/?$ admin/dashboard/distribute/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/admin-amount/?$ admin/dashboard/admin-amount/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/tds/?$ admin/dashboard/tds/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/surplus/?$ admin/dashboard/surplus/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/failed-payments/?$ admin/dashboard/failed-payments/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/ppt/?$ admin/dashboard/ppt/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/ppt/view/?$ admin/dashboard/ppt/view.php [L,QSA]
+  RewriteRule ^admin/dashboard/support/?$ admin/dashboard/support/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/support/poll/?$ admin/dashboard/support/poll.php [L,QSA]
+  RewriteRule ^admin/dashboard/guests/?$ admin/dashboard/guests/index.php [L,QSA]
+  RewriteRule ^admin/dashboard/rank-achievers/?$ admin/dashboard/rank-achievers/index.php [L,QSA]
+  RewriteRule ^dashboard/?$ dashboard/index.php [L,QSA]
+  # Left / Right team lists
+  RewriteRule ^dashboard/team/left/?$ dashboard/team.php?leg=left [L,QSA]
+  RewriteRule ^dashboard/team/right/?$ dashboard/team.php?leg=right [L,QSA]
+  # Team Collaborations module
+  RewriteRule ^dashboard/team-collaborations/?$ dashboard/team-collaborations/index.php [L,QSA]
+  RewriteRule ^dashboard/team-collaborations/login/?$ dashboard/team-collaborations/login.php [L,QSA]
+  RewriteRule ^dashboard/team-collaborations/open/?$ dashboard/team-collaborations/open.php [L,QSA]
+  RewriteRule ^dashboard/team-collaborations/restore/?$ dashboard/team-collaborations/restore.php [L,QSA]
+  # Direct Referrals + Guest List + PPT View + Support
+  RewriteRule ^dashboard/direct-referrals/?$ dashboard/direct-referrals/index.php [L,QSA]
+  RewriteRule ^dashboard/ranks-rewards/?$ dashboard/ranks-rewards/index.php [L,QSA]
+  RewriteRule ^dashboard/guest-list/?$ dashboard/guest-list/index.php [L,QSA]
+  RewriteRule ^dashboard/ppt-view/?$ dashboard/ppt-view/index.php [L,QSA]
+  RewriteRule ^dashboard/ppt-view/download/?$ dashboard/ppt-view/download.php [L,QSA]
+  RewriteRule ^dashboard/support/?$ dashboard/support/index.php [L,QSA]
+  RewriteRule ^dashboard/packages/?$ dashboard/packages.php [L,QSA]
+  RewriteRule ^dashboard/profile/?$ dashboard/profile.php [L,QSA]
+  RewriteRule ^dashboard/operator-configuration/?$ dashboard/operator-configuration/index.php [L,QSA]
+  RewriteRule ^dashboard/wallet/?$ dashboard/wallet.php [L,QSA]
+  RewriteRule ^dashboard/transfer/?$ dashboard/transfer.php [L,QSA]
+  # APIs first — must stay above /dashboard/deposit page rule
+  RewriteRule ^dashboard/api/account/?$ dashboard/api/account.php [L,QSA]
+  RewriteRule ^dashboard/api/deposit\.php$ dashboard/api/deposit.php [L,QSA]
+  RewriteRule ^dashboard/api/deposit/?$ dashboard/api/deposit.php [L,QSA]
+  RewriteRule ^dashboard/api/deposit-status\.php$ dashboard/api/deposit-status.php [L,QSA]
+  RewriteRule ^dashboard/api/deposit-status/?$ dashboard/api/deposit-status.php [L,QSA]
+  RewriteRule ^dashboard/api/deposit-start\.php$ dashboard/api/deposit-start.php [L,QSA]
+  RewriteRule ^dashboard/api/deposit-start/?$ dashboard/api/deposit-start.php [L,QSA]
+  RewriteRule ^dashboard/api/nowpayments-ipn\.php$ dashboard/api/nowpayments-ipn.php [L,QSA]
+  RewriteRule ^dashboard/api/nowpayments-ipn/?$ dashboard/api/nowpayments-ipn.php [L,QSA]
+  RewriteRule ^dashboard/deposit/?$ dashboard/deposit.php [L,QSA]
+  RewriteRule ^dashboard/deposit/checkout/?$ dashboard/deposit/checkout.php [L,QSA]
+  RewriteRule ^dashboard/withdrawal/?$ dashboard/withdrawal.php [L,QSA]
+  RewriteRule ^dashboard/history/?$ dashboard/history/index.php [L,QSA]
+  RewriteRule ^dashboard/history/export/?$ dashboard/history/export.php [L,QSA]
+  # Geneology module under /dashboard/geneology
+  RewriteRule ^dashboard/geneology/?$ dashboard/geneology/genealogy_tree.php [L,QSA]
+  RewriteRule ^dashboard/geneology/([A-Za-z0-9_-]+)/?$ dashboard/geneology/$1.php [L,QSA]
+  RewriteRule ^faqs/?$ public/pages/faqs.php [L,QSA]
+  RewriteRule ^usdt-matching/?$ public/pages/usdt-matching.php [L,QSA]
+  RewriteRule ^binary-plan/?$ public/pages/binary-plan.php [L,QSA]
+  RewriteRule ^yield-estimator/?$ public/pages/yield-estimator.php [L,QSA]
+  RewriteRule ^legal/terms/?$ public/legal/legal-terms.php [L,QSA]
+  RewriteRule ^legal/cookies/?$ public/legal/cookie-settings.php [L,QSA]
+
+  # Block direct access to sensitive folders
+  RewriteRule ^(config|includes|scripts|backups|storage|logs|vendor)/ - [F,L]
+
+  # Real files (CSS/JS/images) must never be rewritten to 404.php
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteRule ^ - [L]
+
+  # Custom 404 for unmatched public routes
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ 404.php [L]
+</IfModule>
+
+# Deny .env and secrets
+<FilesMatch "^(\.env|\.env\..*|composer\.(json|lock))$">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+
+  <FilesMatch "\.(ico|svg|png|jpg|jpeg|webp|woff2|css|js)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
+  # Keep service worker fresh so clients pick up new cache versions
+  <FilesMatch "^sw\.js$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+
+  <FilesMatch "^manifest\.json$">
+    Header set Cache-Control "no-cache"
+    Header set Content-Type "application/manifest+json"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css
+  AddOutputFilterByType DEFLATE application/javascript application/json application/xml
+  AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/html "access plus 1 minute"
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType image/x-icon "access plus 1 year"
+  ExpiresByType image/vnd.microsoft.icon "access plus 1 year"
+  ExpiresByType font/woff2 "access plus 1 year"
+  ExpiresByType font/woff "access plus 1 year"
+  ExpiresByType application/xml "access plus 1 hour"
+  ExpiresByType text/plain "access plus 1 day"
+</IfModule>
+
+AddType text/plain .txt
+AddType application/xml .xml
+AddType image/x-icon .ico
+AddType image/svg+xml .svg
+
+Options -Indexes
+
+<FilesMatch "^(README\.md|\.env)$">
+  Require all denied
+</FilesMatch>

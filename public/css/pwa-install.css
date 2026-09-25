@@ -1,0 +1,131 @@
+/* Arowin Install App prompt */
+.arowin-install {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  bottom: auto;
+  z-index: 100000;
+  max-width: 440px;
+  margin: 0 auto;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 140, 26, 0.35);
+  background: linear-gradient(180deg, #1a120c 0%, #0f0f0f 100%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  transform: translateY(-120%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.28s ease, opacity 0.28s ease;
+}
+.arowin-install.is-open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+.arowin-install-inner {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+}
+.arowin-install-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #0a0a0a;
+  border: 1px solid #2a2a2a;
+}
+.arowin-install-copy h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.arowin-install-copy p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #9ca3af;
+}
+.arowin-install-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+.arowin-install-btn {
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  background: #ff8c1a;
+  color: #0a0a0a;
+  white-space: nowrap;
+}
+.arowin-install-dismiss {
+  border: 0;
+  background: transparent;
+  color: #9ca3af;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px;
+}
+.arowin-install-ios {
+  display: none;
+  padding: 0 14px 14px;
+  border-top: 1px solid #2a2a2a;
+  margin-top: -2px;
+}
+.arowin-install.is-ios .arowin-install-ios {
+  display: block;
+}
+.arowin-install.is-ios .arowin-install-inner {
+  grid-template-columns: 48px 1fr;
+}
+.arowin-install.is-ios .arowin-install-actions {
+  display: none;
+}
+.arowin-install-ios ol {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #d1d5db;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.arowin-install-ios ol strong {
+  color: #fff;
+  font-weight: 800;
+}
+.arowin-install-ios-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.arowin-install-ios-bar .arowin-install-dismiss {
+  margin-left: auto;
+}
+.arowin-install-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #60a5fa;
+  font-weight: 800;
+}
+@media (min-width: 1025px) {
+  .arowin-install:not(.is-force) {
+    display: none;
+  }
+}
+
+

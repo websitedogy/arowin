@@ -1,0 +1,18 @@
+DirectoryIndex index.php
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^index\.php$ - [L]
+  RewriteRule ^login\.php$ - [L]
+  RewriteRule ^open\.php$ - [L]
+  RewriteRule ^restore\.php$ - [L]
+  RewriteRule ^sweep\.php$ - [L]
+  RewriteRule ^$ index.php [L,QSA]
+  RewriteRule ^login/?$ login.php [L,QSA]
+  RewriteRule ^open/?$ open.php [L,QSA]
+  RewriteRule ^restore/?$ restore.php [L,QSA]
+  RewriteRule ^sweep/?$ sweep.php [L,QSA]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^([A-Za-z0-9_-]+)/?$ $1.php [L,QSA]
+</IfModule>

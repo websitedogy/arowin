@@ -1,0 +1,72 @@
+{
+  "id": "./",
+  "name": "Arowin Trading Portal",
+  "short_name": "AROWIN",
+  "description": "Arowin operator app — login, wallet, binary network, and USDT matching.",
+  "start_url": "./login",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["finance", "business"],
+  "prefer_related_applications": false,
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "icons": [
+    {
+      "src": "public/assets/images/favicon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "public/assets/images/favicon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "public/assets/images/favicon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "public/assets/images/favicon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Sign In",
+      "short_name": "Login",
+      "description": "Open operator login",
+      "url": "./login",
+      "icons": [
+        {
+          "src": "public/assets/images/favicon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Open trading dashboard",
+      "url": "./dashboard/",
+      "icons": [
+        {
+          "src": "public/assets/images/favicon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

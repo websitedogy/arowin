@@ -1,0 +1,37 @@
+# Serve dashboard app from this folder
+DirectoryIndex index.php
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^index\.php$ - [L]
+  # Team lists + account API — do not fall back to dashboard index
+  RewriteRule ^team\.php$ - [L]
+  RewriteRule ^packages\.php$ - [L]
+  RewriteRule ^profile\.php$ - [L]
+  RewriteRule ^team/(left|right)/?$ team.php?leg=$1 [L,QSA]
+  RewriteRule ^packages/?$ packages.php [L,QSA]
+  RewriteRule ^profile/?$ profile.php [L,QSA]
+  RewriteRule ^operator-configuration/?$ operator-configuration/index.php [L,QSA]
+  RewriteRule ^api/account/?$ api/account.php [L,QSA]
+  RewriteRule ^api/deposit\.php$ api/deposit.php [L,QSA]
+  RewriteRule ^api/deposit/?$ api/deposit.php [L,QSA]
+  RewriteRule ^api/withdrawal\.php$ api/withdrawal.php [L,QSA]
+  RewriteRule ^api/withdrawal/?$ api/withdrawal.php [L,QSA]
+  # Team Collaborations feature folder
+  RewriteRule ^team-collaborations/?$ team-collaborations/index.php [L,QSA]
+  RewriteRule ^team-collaborations/login/?$ team-collaborations/login.php [L,QSA]
+  RewriteRule ^team-collaborations/open/?$ team-collaborations/open.php [L,QSA]
+  RewriteRule ^team-collaborations/restore/?$ team-collaborations/restore.php [L,QSA]
+  # History feature folder
+  RewriteRule ^history/?$ history/index.php [L,QSA]
+  RewriteRule ^history/export/?$ history/export.php [L,QSA]
+  # Direct Referrals + Guest List + PPT View + Support
+  RewriteRule ^direct-referrals/?$ direct-referrals/index.php [L,QSA]
+  RewriteRule ^ranks-rewards/?$ ranks-rewards/index.php [L,QSA]
+  RewriteRule ^guest-list/?$ guest-list/index.php [L,QSA]
+  RewriteRule ^ppt-view/?$ ppt-view/index.php [L,QSA]
+  RewriteRule ^support/?$ support/index.php [L,QSA]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^ index.php [L,QSA]
+</IfModule>

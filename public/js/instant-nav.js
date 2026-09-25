@@ -1,0 +1,1 @@
+/* Instant-nav progress bar + prefetch system removed. */

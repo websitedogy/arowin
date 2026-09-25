@@ -1,0 +1,9 @@
+DirectoryIndex genealogy_tree.php
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^$ genealogy_tree.php [L,QSA]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^([A-Za-z0-9_-]+)/?$ $1.php [L,QSA]
+</IfModule>

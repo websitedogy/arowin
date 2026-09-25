@@ -1,0 +1,200 @@
+/* Direct Referrals */
+.dr-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.dr-eyebrow {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent, #ff8c1a);
+}
+.dr-title {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
+}
+.dr-sub {
+  margin: 0;
+  color: var(--text-muted, #9ca3af);
+  font-size: 13px;
+  line-height: 1.45;
+  max-width: 40rem;
+}
+.dr-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted, #9ca3af);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: #141414;
+}
+.dr-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.dr-stat {
+  background: #141414;
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.dr-stat span {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted, #9ca3af);
+  margin-bottom: 6px;
+}
+.dr-stat strong {
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+.dr-stat strong.is-ok { color: #86efac; }
+.dr-stat strong.is-warn { color: #fbbf24; }
+.dr-stat strong.is-bad { color: #fca5a5; }
+.dr-search {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.dr-search input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #2a2a2a);
+  background: #101010;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+.dr-search button,
+.dr-clear {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.dr-search button {
+  background: var(--accent, #ff8c1a);
+  color: #0a0a0a;
+}
+.dr-clear {
+  background: transparent;
+  border: 1px solid var(--border, #2a2a2a);
+  color: var(--text-muted, #9ca3af);
+}
+.dr-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 14px;
+  background: #141414;
+}
+.dr-empty {
+  padding: 28px 18px;
+  text-align: center;
+  color: var(--text-muted, #9ca3af);
+  font-size: 13px;
+}
+.dr-empty a {
+  color: var(--accent, #ff8c1a);
+  font-weight: 700;
+  text-decoration: none;
+}
+.dr-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+.dr-table th,
+.dr-table td {
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border, #2a2a2a);
+  vertical-align: middle;
+}
+.dr-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #9ca3af);
+  font-weight: 700;
+  background: #101010;
+}
+.dr-table tr:last-child td { border-bottom: 0; }
+.dr-table .muted { color: var(--text-muted, #9ca3af); }
+.dr-table .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+.dr-member {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dr-member .name { font-weight: 700; }
+.dr-member .phone { font-size: 12px; color: var(--text-muted, #9ca3af); }
+.dr-status {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.dr-status.is-active {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+.dr-status.is-pending {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+}
+.dr-status.is-blocked {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+}
+.dr-leg {
+  display: inline-flex;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.dr-leg.is-left {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+.dr-leg.is-right {
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
+}
+.dr-leg.is-power {
+  background: rgba(255, 140, 26, 0.16);
+  color: #ffd7a8;
+}
+
+@media (max-width: 720px) {
+  .dr-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dr-title { font-size: 18px; }
+}

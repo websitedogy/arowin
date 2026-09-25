@@ -1,0 +1,416 @@
+/* Arowin Admin Login — matches operator auth language (dark visual + cream form) */
+
+:root {
+  --admin-black: #0a0a0a;
+  --admin-orange: #ff8c1a;
+  --admin-cream: #f5f0e8;
+  --admin-ink: #141414;
+  --admin-muted: #6b6b6b;
+  --admin-line: #e0e0e0;
+  --admin-danger: #b42318;
+  --admin-danger-bg: #fef3f2;
+  --admin-danger-line: #fecdca;
+  --font-display: "Rajdhani", sans-serif;
+  --font-body: "Noto Sans", "Segoe UI", sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body.admin-login {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--admin-cream);
+  color: var(--admin-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.admin-login-shell {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1.05fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ── Left visual ── */
+.admin-brand {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(32px, 5vw, 52px) clamp(28px, 5vw, 56px);
+  color: #fff;
+  background: #000;
+}
+
+.admin-brand-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 72% 55% at 82% 12%, rgba(255, 140, 26, 0.18), transparent 62%),
+    radial-gradient(ellipse 48% 42% at 8% 88%, rgba(255, 140, 26, 0.07), transparent 68%),
+    linear-gradient(165deg, #000 0%, #0a0a0a 55%, #111 100%);
+}
+
+.admin-brand-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.2;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 70% at 55% 40%, #000 22%, transparent 78%);
+}
+
+.admin-brand-mark,
+.admin-brand-copy,
+.admin-brand-foot {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #fff;
+  animation: admin-rise 0.65s ease both;
+}
+
+.admin-brand-mark .word {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(2.2rem, 4.2vw, 3.2rem);
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.admin-brand-mark .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--admin-orange);
+  margin-top: 0.15em;
+}
+
+.admin-brand-copy {
+  max-width: 26rem;
+  margin: 40px 0;
+  animation: admin-rise 0.7s ease 0.08s both;
+}
+
+.admin-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--admin-orange);
+}
+
+.admin-eyebrow::before {
+  content: "";
+  width: 18px;
+  height: 2px;
+  background: var(--admin-orange);
+}
+
+.admin-brand-copy h1 {
+  margin: 0 0 14px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(2rem, 3.6vw, 2.75rem);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+}
+
+.admin-brand-copy h1 span {
+  color: var(--admin-orange);
+}
+
+.admin-brand-copy p {
+  margin: 0;
+  max-width: 34ch;
+  color: #a3a3a3;
+  font-size: 15.5px;
+  line-height: 1.65;
+}
+
+.admin-brand-foot {
+  color: #6b6b6b;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  animation: admin-rise 0.7s ease 0.16s both;
+}
+
+/* ── Right form pane ── */
+.admin-form-pane {
+  display: grid;
+  place-items: center;
+  padding: clamp(28px, 5vw, 48px);
+  background: var(--admin-cream);
+  animation: admin-fade 0.75s ease 0.1s both;
+}
+
+.admin-form-panel {
+  width: min(420px, 100%);
+}
+
+.admin-form-header {
+  margin-bottom: 28px;
+}
+
+.admin-form-header h2 {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: clamp(1.85rem, 3vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--admin-ink);
+  line-height: 1.1;
+}
+
+.admin-form-header p {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.admin-alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--admin-danger-bg);
+  border: 1px solid var(--admin-danger-line);
+  color: var(--admin-danger);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.admin-alert i {
+  margin-top: 2px;
+}
+
+.admin-field {
+  margin: 0 0 18px;
+}
+
+.admin-field label {
+  display: block;
+  margin: 0 0 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--admin-ink);
+}
+
+.admin-field input {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--admin-line);
+  background: #fff;
+  color: var(--admin-ink);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.admin-field input::placeholder {
+  color: #9a9a9a;
+}
+
+.admin-field input:hover {
+  border-color: #cfcfcf;
+}
+
+.admin-field input:focus {
+  border-color: var(--admin-orange);
+  box-shadow: 0 0 0 3px rgba(255, 140, 26, 0.18);
+}
+
+/* Kill browser autofill blue/yellow wash */
+.admin-field input:-webkit-autofill,
+.admin-field input:-webkit-autofill:hover,
+.admin-field input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--admin-ink);
+  caret-color: var(--admin-ink);
+  box-shadow: 0 0 0 1000px #fff inset;
+  transition: background-color 99999s ease-out;
+}
+
+.admin-password {
+  position: relative;
+}
+
+.admin-password input {
+  padding-right: 48px;
+}
+
+.admin-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--admin-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.admin-password-toggle:hover {
+  color: var(--admin-ink);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.admin-password-toggle .icon-hide {
+  display: none;
+}
+
+.admin-password-toggle.is-visible .icon-show {
+  display: none;
+}
+
+.admin-password-toggle.is-visible .icon-hide {
+  display: block;
+}
+
+.admin-submit {
+  width: 100%;
+  margin-top: 6px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--admin-orange);
+  color: #111;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.admin-submit:hover:not(:disabled) {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
+.admin-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.admin-submit:disabled {
+  opacity: 0.75;
+  cursor: wait;
+}
+
+.admin-form-footer {
+  margin: 24px 0 0;
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+
+.admin-form-footer a {
+  color: var(--admin-ink);
+  text-decoration: none;
+  font-weight: 600;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.admin-form-footer a:hover {
+  color: var(--admin-orange);
+  border-bottom-color: var(--admin-orange);
+}
+
+@keyframes admin-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes admin-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 900px) {
+  .admin-login-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-brand {
+    min-height: auto;
+    padding-bottom: 36px;
+  }
+
+  .admin-brand-copy {
+    margin: 28px 0 8px;
+  }
+
+  .admin-brand-foot {
+    display: none;
+  }
+
+  .admin-form-pane {
+    place-items: start stretch;
+    padding-top: 32px;
+    padding-bottom: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-brand-mark,
+  .admin-brand-copy,
+  .admin-brand-foot,
+  .admin-form-pane {
+    animation: none !important;
+  }
+
+  .admin-submit {
+    transition: none;
+  }
+}

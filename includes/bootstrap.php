@@ -78,6 +78,7 @@ if ($AROWIN_BOOT_LIGHT) {
     // Admin desk — lean boot (page-specific repos load on demand)
     require_once __DIR__ . '/register-repository.php';
     require_once __DIR__ . '/auth.php';
+    require_once __DIR__ . '/profile-repository.php';
     require_once __DIR__ . '/packages-catalog.php';
     require_once __DIR__ . '/package-power.php';
     require_once __DIR__ . '/purchase-repository.php';

@@ -103,6 +103,7 @@ function arowin_ensure_shared_contact_schema(): void
 function arowin_normalize_sponsor_id(string $sponsorId): string
 {
     $id = strtoupper(trim($sponsorId));
+    $id = trim($id, "/\\");
     $id = preg_replace('/\s+/', '', $id) ?? $id;
     return $id;
 }

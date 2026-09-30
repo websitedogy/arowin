@@ -32,7 +32,21 @@ if (!function_exists('admin_url')) {
         if ($path === '' || $path === '/') {
             return arowin_abs($BASE, '/admin/');
         }
-        return arowin_abs($BASE, '/admin/' . trim($path, '/') . '/');
+
+        $query = '';
+        $hash = '';
+        if (str_contains($path, '#')) {
+            [$path, $hash] = explode('#', $path, 2);
+            $hash = '#' . $hash;
+        }
+        if (str_contains($path, '?')) {
+            [$path, $query] = explode('?', $path, 2);
+            $query = '?' . $query;
+        }
+
+        $path = trim($path, '/');
+        $url = arowin_abs($BASE, '/admin/' . ($path !== '' ? $path . '/' : ''));
+        return $url . $query . $hash;
     }
 }
 

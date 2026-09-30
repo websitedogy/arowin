@@ -289,9 +289,12 @@ function arowin_update_operator_config(string $username, array $data): array
         ':u' => $username,
     ]);
 
-    $_SESSION['arowin_name']   = $fullName;
-    $_SESSION['arowin_email']  = $email;
-    $_SESSION['arowin_mobile'] = $phone;
+    $sessionUser = arowin_normalize_sponsor_id((string) ($_SESSION['arowin_uid'] ?? ''));
+    if ($sessionUser !== '' && $sessionUser === $username) {
+        $_SESSION['arowin_name']   = $fullName;
+        $_SESSION['arowin_email']  = $email;
+        $_SESSION['arowin_mobile'] = $phone;
+    }
 
     return ['ok' => true, 'message' => 'Operator configuration saved.'];
 }

@@ -240,7 +240,7 @@ require dirname(__DIR__, 2) . '/includes/layout-start.php';
                     <input type="hidden" name="status" value="<?= e($filter) ?>">
                     <button class="admin-btn link" type="submit" title="Open member dashboard">Login as</button>
                   </form>
-                  <a class="admin-btn ghost" href="<?= e(admin_url('/dashboard/users/edit/?username=' . rawurlencode($username))) ?>">Edit profile</a>
+                  <a class="admin-btn ghost" href="<?= e(admin_url('/dashboard/users/edit') . '?username=' . rawurlencode($username)) ?>">Edit profile</a>
                   <?php if ($status !== 'rejected'): ?>
                     <form method="post" data-confirm="<?= e('Are you sure you want to block ' . $username . '? They will not be able to sign in with this ID.') ?>">
                       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
@@ -323,6 +323,7 @@ require dirname(__DIR__, 2) . '/includes/layout-start.php';
               <input type="hidden" name="status" value="<?= e($filter) ?>">
               <button class="admin-btn link" type="submit">Login as</button>
             </form>
+            <a class="admin-btn ghost" href="<?= e(admin_url('/dashboard/users/edit') . '?username=' . rawurlencode($username)) ?>">Edit profile</a>
             <?php if ($status !== 'rejected'): ?>
               <form method="post" data-confirm="<?= e('Are you sure you want to block ' . $username . '? They will not be able to sign in with this ID.') ?>">
                 <input type="hidden" name="csrf" value="<?= e($csrf) ?>">

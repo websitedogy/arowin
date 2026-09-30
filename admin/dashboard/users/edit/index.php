@@ -14,6 +14,9 @@ $flashOk = null;
 $flashErr = null;
 $username = arowin_normalize_sponsor_id((string) ($_GET['username'] ?? $_POST['username'] ?? ''));
 $user = $username !== '' ? arowin_get_operator_profile($username) : null;
+if (!$user && $username !== '' && function_exists('arowin_get_user_by_username')) {
+    $user = arowin_get_user_by_username($username);
+}
 
 if (!$user) {
     $flashErr = 'User not found.';

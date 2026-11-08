@@ -3,19 +3,20 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || `http://${API_HOST}:8000/ap
 const pendingGetRequests = new Map()
 const TAB_SESSION_KEY = 'arowin.tab-session'
 
-async function sendRequest(path, { body, ...options } = {}) {
+async function sendRequest(path, { body, responseType, ...options } = {}) {
   let response
   const headers = new Headers(options.headers)
   const tabSession = window.sessionStorage.getItem(TAB_SESSION_KEY)
   if (tabSession) headers.set('X-Arowin-Session', tabSession)
-  if (body !== undefined) headers.set('Content-Type', 'application/json')
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+  if (body !== undefined && !isFormData) headers.set('Content-Type', 'application/json')
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
       credentials: 'omit',
       headers,
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(body === undefined ? {} : { body: isFormData ? body : JSON.stringify(body) }),
     })
   } catch (error) {
     if (error instanceof TypeError) {
@@ -27,6 +28,22 @@ async function sendRequest(path, { body, ...options } = {}) {
 
   const nextTabSession = response.headers.get('X-Arowin-Session')
   if (nextTabSession) window.sessionStorage.setItem(TAB_SESSION_KEY, nextTabSession)
+
+  if (responseType === 'blob') {
+    if (!response.ok) {
+      let result
+      try {
+        result = await response.json()
+      } catch {
+        throw new Error('The backend returned an invalid response.')
+      }
+      const error = new Error(result.message || `Request failed (${response.status}).`)
+      error.status = response.status
+      throw error
+    }
+
+    return response.blob()
+  }
 
   let result
   try {
@@ -51,7 +68,7 @@ export function apiRequest(path, options = {}) {
     return sendRequest(path, options)
   }
 
-  const requestKey = `${API_BASE_URL}${path}`
+  const requestKey = `${API_BASE_URL}${path}:${options.responseType || 'json'}`
   const existingRequest = pendingGetRequests.get(requestKey)
   if (existingRequest) return existingRequest
 

@@ -9,21 +9,31 @@ use PDOException;
 
 final class TeamAssignmentController
 {
+    private ?bool $hasLegacyJoiningDateColumn = null;
+
     public function __construct(private readonly PDO $database)
     {
     }
 
     public function listTeamLeaders(): array
     {
+        $joiningDate = $this->joiningDateExpression('leader', 'salary');
         $statement = $this->database->query(
             "SELECT leader.id, leader.employee_id, leader.name, leader.email, leader.mobile,
-                    leader.created_at, salary.joining_date, COUNT(assignment.telecaller_id) AS assigned_count
+                    leader.created_at, {$joiningDate} AS joining_date, COUNT(assignment.telecaller_id) AS assigned_count,
+                    (SELECT COUNT(*)
+                     FROM users AS available_employee
+                     LEFT JOIN team_assignments AS available_assignment
+                       ON available_assignment.telecaller_id = available_employee.id
+                     WHERE available_employee.role = 'telecaller'
+                       AND available_employee.is_active = 1
+                       AND available_assignment.telecaller_id IS NULL) AS available_count
              FROM users AS leader
              LEFT JOIN employee_salaries AS salary ON salary.user_id = leader.id
              LEFT JOIN team_assignments AS assignment ON assignment.team_leader_id = leader.id
              WHERE leader.role = 'team_leader' AND leader.is_active = 1
              GROUP BY leader.id, leader.employee_id, leader.name, leader.email, leader.mobile,
-                      leader.created_at, salary.joining_date
+                      leader.created_at, {$joiningDate}
              ORDER BY leader.created_at DESC, leader.id DESC"
         );
 
@@ -36,15 +46,17 @@ final class TeamAssignmentController
             'createdAt' => $row['created_at'],
             'joiningDate' => $row['joining_date'],
             'assignedCount' => (int) $row['assigned_count'],
+            'availableCount' => (int) $row['available_count'],
         ], $statement->fetchAll());
     }
 
     public function listAvailableTelecallers(int $teamLeaderId): array
     {
         $this->requireTeamLeader($teamLeaderId);
+        $joiningDate = $this->joiningDateExpression('employee', 'salary');
         $statement = $this->database->query(
             "SELECT employee.id, employee.employee_id, employee.name, employee.email, employee.mobile,
-                    employee.created_at, salary.joining_date
+                    employee.created_at, {$joiningDate} AS joining_date
              FROM users AS employee
              LEFT JOIN employee_salaries AS salary ON salary.user_id = employee.id
              LEFT JOIN team_assignments AS assignment ON assignment.telecaller_id = employee.id
@@ -75,9 +87,10 @@ final class TeamAssignmentController
             throw new \InvalidArgumentException('The selected Team Leader does not exist.');
         }
 
+        $joiningDate = $this->joiningDateExpression('employee', 'salary');
         $statement = $this->database->prepare(
             "SELECT employee.id, employee.employee_id, employee.name, employee.email, employee.mobile,
-                    employee.is_active, employee.created_at, salary.joining_date, assignment.assigned_at
+                    employee.is_active, employee.created_at, {$joiningDate} AS joining_date, assignment.assigned_at
              FROM team_assignments AS assignment
              INNER JOIN users AS employee ON employee.id = assignment.telecaller_id
              LEFT JOIN employee_salaries AS salary ON salary.user_id = employee.id
@@ -101,6 +114,7 @@ final class TeamAssignmentController
 
     public function listAssignmentHistory(): array
     {
+        $leaderJoiningDate = $this->joiningDateExpression('leader', 'leader_salary');
         $statement = $this->database->query(
             "SELECT log.id, log.created_at,
                     JSON_UNQUOTE(JSON_EXTRACT(log.metadata, '$.team_leader_id')) AS team_leader_id,
@@ -109,7 +123,7 @@ final class TeamAssignmentController
                     COALESCE(JSON_UNQUOTE(JSON_EXTRACT(log.metadata, '$.team_leader_mobile')), leader.mobile) AS team_leader_mobile,
                     COALESCE(JSON_UNQUOTE(JSON_EXTRACT(log.metadata, '$.team_leader_email')), leader.email) AS team_leader_email,
                     COALESCE(JSON_UNQUOTE(JSON_EXTRACT(log.metadata, '$.team_leader_created_at')), leader.created_at) AS team_leader_created_at,
-                    COALESCE(JSON_UNQUOTE(JSON_EXTRACT(log.metadata, '$.team_leader_joining_date')), leader_salary.joining_date) AS team_leader_joining_date,
+                    COALESCE(JSON_UNQUOTE(JSON_EXTRACT(log.metadata, '$.team_leader_joining_date')), {$leaderJoiningDate}) AS team_leader_joining_date,
                     JSON_UNQUOTE(JSON_EXTRACT(log.metadata, '$.telecaller_id')) AS telecaller_id,
                     COALESCE(JSON_UNQUOTE(JSON_EXTRACT(log.metadata, '$.telecaller_employee_id')), telecaller.employee_id) AS telecaller_employee_id,
                     COALESCE(JSON_UNQUOTE(JSON_EXTRACT(log.metadata, '$.telecaller_name')), telecaller.name) AS telecaller_name
@@ -221,8 +235,44 @@ final class TeamAssignmentController
         );
         $activities->execute(['team_leader_id' => (string) $teamLeaderId]);
 
+        $history = $this->database->prepare(
+            "SELECT
+                COALESCE(
+                    JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.telecaller_employee_id')),
+                    employee.employee_id
+                ) AS employee_id,
+                COALESCE(
+                    JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.telecaller_name')),
+                    employee.name,
+                    'Deleted Telecaller'
+                ) AS employee_name,
+                log.created_at
+             FROM activity_logs AS log
+             LEFT JOIN users AS employee
+               ON employee.id = CAST(JSON_UNQUOTE(JSON_EXTRACT(log.metadata, '$.telecaller_id')) AS UNSIGNED)
+             WHERE action = 'team.telecaller.assigned'
+               AND JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.team_leader_id')) = :team_leader_id
+               AND log.created_at >= DATE_FORMAT(DATE_SUB(CURRENT_DATE, INTERVAL 11 MONTH), '%Y-%m-01')
+             ORDER BY log.created_at DESC, log.id DESC"
+        );
+        $history->execute(['team_leader_id' => (string) $teamLeaderId]);
+
+        $salesTarget = $this->database->prepare(
+            'SELECT target_amount, target_month
+             FROM team_leader_sales_targets
+             WHERE team_leader_id = :team_leader_id
+               AND target_month = DATE_FORMAT(CURRENT_DATE, \'%Y-%m-01\')
+             LIMIT 1'
+        );
+        $salesTarget->execute(['team_leader_id' => $teamLeaderId]);
+        $currentSalesTarget = $salesTarget->fetch();
+
         return [
             'members' => $this->listAssignedTelecallers($teamLeaderId),
+            'salesTarget' => is_array($currentSalesTarget) ? [
+                'amount' => (string) $currentSalesTarget['target_amount'],
+                'month' => substr((string) $currentSalesTarget['target_month'], 0, 7),
+            ] : null,
             'activities' => array_map(static function (array $row): array {
                 $metadata = json_decode((string) $row['metadata'], true);
 
@@ -234,6 +284,13 @@ final class TeamAssignmentController
                     'time' => $row['created_at'],
                 ];
             }, $activities->fetchAll()),
+            'history' => array_map(static fn (array $row): array => [
+                'employeeId' => (string) ($row['employee_id'] ?? ''),
+                'employeeName' => (string) $row['employee_name'],
+                'activity' => 'Assigned to your team',
+                'salesTarget' => null,
+                'time' => $row['created_at'],
+            ], $history->fetchAll()),
         ];
     }
 
@@ -246,18 +303,39 @@ final class TeamAssignmentController
 
     private function findActiveUser(int $userId, string $role): ?array
     {
+        $joiningDate = $this->joiningDateExpression('employee', 'salary');
         $statement = $this->database->prepare(
-            'SELECT employee.id, employee.name, employee.employee_id, employee.mobile, employee.email,
-                    employee.created_at, salary.joining_date
+            "SELECT employee.id, employee.name, employee.employee_id, employee.mobile, employee.email,
+                    employee.created_at, {$joiningDate} AS joining_date
              FROM users AS employee
              LEFT JOIN employee_salaries AS salary ON salary.user_id = employee.id
              WHERE employee.id = :id AND employee.role = :role AND employee.is_active = 1
              LIMIT 1
-             FOR UPDATE'
+             FOR UPDATE"
         );
         $statement->execute(['id' => $userId, 'role' => $role]);
         $user = $statement->fetch();
 
         return is_array($user) ? $user : null;
+    }
+
+    private function joiningDateExpression(string $userAlias, string $salaryAlias): string
+    {
+        if ($this->hasLegacyJoiningDateColumn === null) {
+            $column = $this->database->query(
+                "SELECT COUNT(*)
+                 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'users'
+                   AND COLUMN_NAME = 'joining_date'"
+            );
+            $this->hasLegacyJoiningDateColumn = (int) $column->fetchColumn() > 0;
+        }
+
+        if ($this->hasLegacyJoiningDateColumn) {
+            return "COALESCE({$salaryAlias}.joining_date, {$userAlias}.joining_date)";
+        }
+
+        return "{$salaryAlias}.joining_date";
     }
 }

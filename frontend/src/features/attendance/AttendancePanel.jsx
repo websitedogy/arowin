@@ -138,6 +138,7 @@ export default function AttendancePanel({ compact = false }) {
   const checkInUntil = attendance?.checkInUntil || '10:30:00'
   const checkInOpen = nowInOfficeTime >= checkInFrom && nowInOfficeTime < checkInUntil
   const isPaidHolidayToday = Boolean(attendance?.todayIsHoliday || attendance?.todayIsSunday)
+  const isOnApprovedLeaveToday = Boolean(attendance?.todayIsApprovedLeave)
   const checkoutOpen = nowInOfficeTime >= (attendance?.checkoutFrom || '17:30')
   const progress = attendance?.monthlySalary > 0
     ? Math.min(100, (attendance.earned / attendance.monthlySalary) * 100)
@@ -190,6 +191,8 @@ export default function AttendancePanel({ compact = false }) {
           <div className="attendance-salary-scales">
             <div><span>Monthly salary</span><strong>{attendance.monthlySalary === null ? 'Not set' : currency(attendance.monthlySalary)}</strong></div>
             <div><span>Earned this month</span><strong>{attendance.earned === null ? 'Not set' : currency(attendance.earned)}</strong></div>
+            <div><span>Daily activity bonus</span><strong>{currency(attendance.activityBonus)}</strong></div>
+            <div><span>Approved leave cut-off</span><strong>{attendance.leaveDeductions === null ? 'Not set' : currency(attendance.leaveDeductions)}</strong></div>
             <div><span>Cut-off · after late deductions</span><strong>{attendance.remainingPayable === null ? 'Not set' : currency(attendance.remainingPayable)}</strong></div>
           </div>
           <div
@@ -206,18 +209,22 @@ export default function AttendancePanel({ compact = false }) {
             <small>
               {attendance.dailySalary === null
                 ? 'Daily salary not available'
-                : `${currency(attendance.dailySalary)} earned after a completed check-in and check-out; Sundays and configured holidays are paid.`}
+                : `${currency(attendance.dailySalary)} earned after a completed check-in and check-out; approved leave is unpaid, while Sundays and configured holidays are paid.`}
             </small>
           </div>
 
           <div className="attendance-policy-note">
             <Icon name="clock" size={17} />
-            <span>Check in by 9:45 AM to avoid a deduction. Check-ins from 9:46 AM to 10:29 AM are marked late; the ₹100 deduction is included in the cut-off. Sundays and Sub Editor holidays are paid and need no attendance. Attendance requires live location within {attendance.officeRadiusMeters} meters and a selfie.</span>
+            <span>Check in by 9:45 AM to avoid a deduction. Check-ins from 9:46 AM to 10:29 AM are marked late; the ₹100 deduction is included in the cut-off. Approved leave and unattended workdays are unpaid. Sundays and Sub Editor holidays are paid and need no attendance. Attendance requires live location within {attendance.officeRadiusMeters} meters and a selfie.</span>
           </div>
 
           {isPaidHolidayToday ? (
             <div className="attendance-today-status">
               <span>Today: H · {attendance.todayHolidayName || 'Sunday · Paid holiday'}</span>
+            </div>
+          ) : isOnApprovedLeaveToday ? (
+            <div className="attendance-today-status">
+              <span>Today: Approved leave · Unpaid</span>
             </div>
           ) : today && (
             <div className="attendance-today-status">
@@ -232,12 +239,14 @@ export default function AttendancePanel({ compact = false }) {
                 type="button"
                 className="attendance-action-button"
                 onClick={() => beginAttendanceAction('check-in')}
-                disabled={!attendance.salaryConfigured || !attendance.officeConfigured || !checkInOpen || isPaidHolidayToday || isLocating}
+                disabled={!attendance.salaryConfigured || !attendance.officeConfigured || !checkInOpen || isPaidHolidayToday || isOnApprovedLeaveToday || isLocating}
               >
                 {isLocating
                   ? 'Getting live location…'
                   : isPaidHolidayToday
                     ? 'Paid holiday · No check-in needed'
+                  : isOnApprovedLeaveToday
+                    ? 'Approved leave · No check-in'
                   : nowInOfficeTime < checkInFrom
                     ? 'Check-in opens at 12:00 AM'
                     : nowInOfficeTime >= checkInUntil

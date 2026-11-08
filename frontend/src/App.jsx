@@ -13,7 +13,14 @@ import EmployeeDirectoryPage from './features/employees/EmployeeDirectoryPage'
 import BudgetDashboard from './features/budget/BudgetDashboard'
 import SalaryManagementPage from './features/budget/SalaryManagementPage'
 import OfficeLocationSetup from './features/attendance/OfficeLocationSetup'
+import LeaveManagementPage from './features/leave/LeaveManagementPage'
+import DailyActivitiesPage from './features/activities/DailyActivitiesPage'
+import SalesReviewPage from './features/sales/SalesReviewPage'
+import PackageIncentiveSetupPage from './features/sales/PackageIncentiveSetupPage'
+import EarnedIncentivesPage from './features/sales/EarnedIncentivesPage'
+import SalesSummaryPage from './features/sales/SalesSummaryPage'
 import SettingsPage from './features/settings/SettingsPage'
+import SupportTicketsPage from './features/support/SupportTicketsPage'
 
 function App() {
   const credentialToken = window.location.pathname.match(/^\/credentials\/([a-f0-9]{64})$/)?.[1]
@@ -146,8 +153,36 @@ function App() {
             return <OfficeLocationSetup />
           }
 
+          if (currentPath === '/leave-requests') {
+            return <LeaveManagementPage user={user} />
+          }
+
+          if (currentPath === '/support-tickets') {
+            return <SupportTicketsPage user={user} />
+          }
+
+          if (currentPath === '/daily-activities') {
+            return <DailyActivitiesPage user={user} />
+          }
+
           if (currentPath.startsWith('/targets')) {
             return <TargetSetupPage currentPath={currentPath} onNavigate={navigate} />
+          }
+
+          if (currentPath === '/sales/total') {
+            return <SalesReviewPage />
+          }
+
+          if (currentPath === '/incentives/packages') {
+            return <PackageIncentiveSetupPage />
+          }
+
+          if (currentPath === '/incentives/earned') {
+            return <EarnedIncentivesPage />
+          }
+
+          if (['/sales/weekly', '/sales/monthly'].includes(currentPath)) {
+            return <SalesSummaryPage key={currentPath} feature={subEditorFeatureByPath[currentPath]} />
           }
 
           if (subEditorFeatureByPath[currentPath]) {
@@ -171,6 +206,7 @@ function App() {
     return (
       <RoleDashboard
         user={user}
+        onUserUpdate={setUser}
         onLogout={handleLogout}
         onBack={() => goBack(user.role === 'team_leader' ? '/team-leader' : '/telecaller')}
         currentPath={currentPath}

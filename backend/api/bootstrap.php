@@ -34,6 +34,7 @@ spl_autoload_register(static function (string $className): void {
         $segments[0] = 'modules';
         if (isset($segments[1])) {
             $moduleDirectories = [
+                'DailyActivities' => 'daily-activities',
                 'TeamAssignments' => 'team-assignments',
             ];
             $segments[1] = $moduleDirectories[$segments[1]] ?? strtolower($segments[1]);

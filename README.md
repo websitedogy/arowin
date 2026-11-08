@@ -49,7 +49,11 @@ Keep the PHP API terminal open while using the app. If sign-in says it cannot re
 
 Sign in as the provisioned Sub Editor and create Team Leader or Telecaller IDs in the dashboard. Account credentials and employee details are stored in MySQL, and passwords are hashed. The app emails a one-time credential-download link from `AROWIN <arowintradin@gmail.com>`; the password is not included in the email itself. Configure the Gmail App Password and encryption key in the backend environment before creating accounts. Recipients can then download their credentials and sign in to their role-specific dashboard.
 
-Use **Target Setup → Work Assigning to TL** to assign active Telecallers to Team Leaders. Assignments are saved in MySQL and displayed in the assigned Team Leader's dashboard. Sales target setup awaits the business rules and workflow.
+Use **Target Setup → Team Assignment** to assign active Telecallers to Team Leaders, see each leader’s assigned-member count, and view their team. Use **Target Setup → Sales Target Setup** to save monthly USDT targets for each Team Leader and review the last 12 months of target history. Apply new database tables after pulling updates with the schema-only setup command in the backend README.
+
+Team Leaders and Telecallers can apply for leave from **Leave** in their dashboard navigation and view request status there. Sub Editors can review all requests from **Leave Requests** in their dashboard navigation and approve or reject pending requests. Apply the additive schema update after pulling this feature.
+
+Team Leaders and Telecallers can submit platform activity screenshots from **Daily Activities**. Each submission is timestamped automatically and may include multiple screenshots; Sub Editors can review the private uploads and verify each submission. Apply the additive schema update after pulling this feature.
 
 Every account receives a unique, permanent six-digit Employee ID when created. Existing accounts receive an ID the next time the database setup script runs; the ID is shown in employee records and credential downloads.
 

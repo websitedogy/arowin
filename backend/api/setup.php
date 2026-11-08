@@ -78,6 +78,7 @@ try {
         'mobile' => "VARCHAR(40) NOT NULL DEFAULT ''",
         'date_of_birth' => "DATE NOT NULL DEFAULT '1970-01-01'",
         'address' => "VARCHAR(500) NOT NULL DEFAULT ''",
+        'profile_image_path' => 'VARCHAR(255) DEFAULT NULL',
     ];
     $columnCheck = $connection->prepare(
         'SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -88,6 +89,57 @@ try {
         $columnCheck->execute(['table_name' => 'users', 'column_name' => $column]);
         if ((int) $columnCheck->fetchColumn() === 0) {
             $connection->exec(sprintf('ALTER TABLE users ADD COLUMN `%s` %s', $column, $definition));
+        }
+    }
+
+    $leaveTypeCheck = $connection->prepare(
+        'SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name'
+    );
+    $leaveTypeCheck->execute(['table_name' => 'telecaller_leads', 'column_name' => 'lead_type']);
+    if ((int) $leaveTypeCheck->fetchColumn() > 0) {
+        $connection->exec('ALTER TABLE telecaller_leads DROP COLUMN lead_type');
+    }
+
+    $leaveTypeCheck->execute(['table_name' => 'leave_requests', 'column_name' => 'leave_type']);
+    if ((int) $leaveTypeCheck->fetchColumn() === 0) {
+        $connection->exec(
+            "ALTER TABLE leave_requests
+             ADD COLUMN leave_type ENUM('casual', 'sick', 'emergency', 'personal')
+             NOT NULL DEFAULT 'casual' AFTER user_id"
+        );
+    }
+
+    $activityStatusColumn = $connection->query(
+        "SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_activities' AND COLUMN_NAME = 'status'"
+    )->fetchColumn();
+    if (is_string($activityStatusColumn) && strpos($activityStatusColumn, "'rejected'") === false) {
+        $connection->exec(
+            "ALTER TABLE daily_activities
+             MODIFY status ENUM('pending', 'verified', 'rejected') NOT NULL DEFAULT 'pending'"
+        );
+    }
+
+    foreach ([
+        'reviewed_at' => 'DATETIME NULL AFTER verified_at',
+        'rejection_reason' => 'VARCHAR(500) NULL AFTER reviewed_at',
+    ] as $column => $definition) {
+        $columnCheck->execute(['table_name' => 'daily_activities', 'column_name' => $column]);
+        if ((int) $columnCheck->fetchColumn() === 0) {
+            $connection->exec(sprintf('ALTER TABLE daily_activities ADD COLUMN `%s` %s', $column, $definition));
+        }
+    }
+
+    foreach ([
+        'bank_name' => "VARCHAR(120) NOT NULL DEFAULT '' AFTER total_budget",
+        'account_holder_name' => "VARCHAR(120) NOT NULL DEFAULT '' AFTER bank_name",
+        'account_number' => "VARCHAR(34) NOT NULL DEFAULT '' AFTER account_holder_name",
+        'ifsc_code' => "CHAR(11) NOT NULL DEFAULT '' AFTER account_number",
+    ] as $column => $definition) {
+        $columnCheck->execute(['table_name' => 'company_budgets', 'column_name' => $column]);
+        if ((int) $columnCheck->fetchColumn() === 0) {
+            $connection->exec(sprintf('ALTER TABLE company_budgets ADD COLUMN `%s` %s', $column, $definition));
         }
     }
 

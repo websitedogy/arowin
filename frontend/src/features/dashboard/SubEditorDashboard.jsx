@@ -223,10 +223,6 @@ export default function SubEditorDashboard({
                   <Icon name="plus" size={19} />
                   Create Employee ID
                 </button>
-                <button type="button" className="outline-btn" onClick={() => openEmployeeModal('Sub Editor')}>
-                  <Icon name="userPlus" size={19} />
-                  Add Sub Editor
-                </button>
               </div>
             </header>
 

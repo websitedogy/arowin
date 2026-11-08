@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiRequest } from '../../api'
 import Icon from './components/Icon'
 import { subEditorFeatures } from './subEditorFeatures'
@@ -6,6 +6,9 @@ import { subEditorFeatures } from './subEditorFeatures'
 const navigation = [
   { label: 'Dashboard', icon: 'home', path: '/' },
   { label: 'All Employees', icon: 'users', path: '/employees/all' },
+  { label: 'Leave Requests', icon: 'calendar', path: '/leave-requests' },
+  { label: 'Support Tickets', icon: 'headset', path: '/support-tickets' },
+  { label: 'Daily Activities', icon: 'file', path: '/daily-activities' },
 ]
 
 function isNavigationActive(path, currentPath) {
@@ -24,14 +27,66 @@ function employeeRoute(employee) {
 }
 
 export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, currentPath, children }) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia('(max-width: 850px)').matches)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia('(max-width: 1024px)').matches)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [search, setSearch] = useState('')
   const [employees, setEmployees] = useState([])
   const [activities, setActivities] = useState([])
+  const [supportTickets, setSupportTickets] = useState([])
+  const [supportLoadError, setSupportLoadError] = useState('')
   const [dataLoadError, setDataLoadError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const profileMenuRef = useRef(null)
+
+  useEffect(() => {
+    const compactViewport = window.matchMedia('(max-width: 1024px)')
+    const closeOnCompact = () => {
+      if (compactViewport.matches) setSidebarCollapsed(true)
+    }
+    compactViewport.addEventListener('change', closeOnCompact)
+    return () => compactViewport.removeEventListener('change', closeOnCompact)
+  }, [])
+
+  useEffect(() => {
+    if (sidebarCollapsed || !window.matchMedia('(max-width: 1024px)').matches) return undefined
+    const previousOverflow = document.body.style.overflow
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setSidebarCollapsed(true)
+    }
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [sidebarCollapsed])
+
+  useEffect(() => {
+    if (!showProfileMenu) return undefined
+    const closeOnOutsideClick = (event) => {
+      if (!profileMenuRef.current?.contains(event.target)) setShowProfileMenu(false)
+    }
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setShowProfileMenu(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [showProfileMenu])
+
+  const loadSupportTickets = useCallback(async () => {
+    try {
+      const result = await apiRequest('/support/tickets')
+      setSupportTickets(result.tickets)
+      setSupportLoadError('')
+    } catch (error) {
+      setSupportLoadError(error.message)
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -55,6 +110,15 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
     }
   }, [])
 
+  useEffect(() => {
+    const initialLoadTimer = window.setTimeout(loadSupportTickets, 0)
+    const refreshTimer = window.setInterval(loadSupportTickets, 30000)
+    return () => {
+      window.clearTimeout(initialLoadTimer)
+      window.clearInterval(refreshTimer)
+    }
+  }, [loadSupportTickets])
+
   const searchResults = useMemo(() => {
     const query = search.trim().toLowerCase()
     if (!query) return []
@@ -64,6 +128,13 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
   }, [employees, search])
 
   const currentUserName = user?.name || 'Sub Editor User'
+  const currentPageTitle = currentPath === '/'
+    ? 'Dashboard'
+    : navigation.find((item) => item.path === currentPath)?.label
+      || subEditorFeatures.find((item) => item.path === currentPath || (item.path === '/targets' && currentPath.startsWith('/targets/')))?.label
+      || ({ '/employees/team-leaders': 'Team Leaders', '/employees/telecallers': 'Telecallers', '/employees/sub-editors': 'Sub Editors', '/employees/active': 'Active Employees', '/settings': 'Settings' })[currentPath]
+      || 'Workspace'
+  const ticketsNeedingAttention = supportTickets.filter((ticket) => ['open', 'in_progress'].includes(ticket.status))
   const pageContent = children({
     employees,
     setEmployees,
@@ -75,8 +146,18 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
   })
 
   return (
-    <div className={`dashboard-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-      <aside className="sidebar">
+    <div className={`dashboard-shell sub-editor-workspace${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+      <button
+        type="button"
+        className="mobile-sidebar-overlay"
+        aria-label="Close navigation menu"
+        tabIndex={sidebarCollapsed ? -1 : 0}
+        onClick={() => setSidebarCollapsed(true)}
+      />
+      <aside className="sidebar" id="sub-editor-sidebar">
+        <button type="button" className="mobile-sidebar-close" aria-label="Close navigation menu" onClick={() => setSidebarCollapsed(true)}>
+          <Icon name="close" size={19} />
+        </button>
         <div className="brand-row">
           <div className="brand-icon">A</div>
           <div className="brand-copy">
@@ -95,10 +176,18 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
                 className={`nav-item${active ? ' active' : ''}`}
                 aria-current={active ? 'page' : undefined}
                 title={sidebarCollapsed ? item.label : undefined}
-                onClick={() => onNavigate(item.path)}
+                onClick={() => {
+                  onNavigate(item.path)
+                  if (window.matchMedia('(max-width: 1024px)').matches) setSidebarCollapsed(true)
+                }}
               >
                 <Icon name={item.icon} size={20} />
                 <span className="nav-label">{item.label}</span>
+                {item.path === '/support-tickets' && ticketsNeedingAttention.length > 0 && (
+                  <span className="support-nav-badge" aria-label={`${ticketsNeedingAttention.length} tickets need attention`}>
+                    {ticketsNeedingAttention.length > 99 ? '99+' : ticketsNeedingAttention.length}
+                  </span>
+                )}
               </button>
             )
           })}
@@ -113,7 +202,10 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
                   className={`nav-item${active ? ' active' : ''}`}
                   aria-current={active ? 'page' : undefined}
                   title={sidebarCollapsed ? item.label : undefined}
-                  onClick={() => onNavigate(item.path)}
+                  onClick={() => {
+                    onNavigate(item.path)
+                    if (window.matchMedia('(max-width: 1024px)').matches) setSidebarCollapsed(true)
+                  }}
                 >
                   <Icon name={item.icon} size={20} />
                   <span className="nav-label">{item.label}</span>
@@ -126,14 +218,25 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
       </aside>
 
       <main className="dashboard-main">
-        <div className="topbar">
-          <button type="button" className="back-page-button" onClick={onBack} aria-label="Go back">
-            <Icon name="back" size={18} />
-            <span>Back</span>
-          </button>
-          <button type="button" className="menu-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label="Toggle sidebar">
-            <Icon name="menu" size={21} />
-          </button>
+        <header className="topbar sub-editor-topbar">
+          <div className="team-header-identity">
+            <button
+              type="button"
+              className="menu-toggle"
+              onClick={() => setSidebarCollapsed((value) => !value)}
+              aria-label={sidebarCollapsed ? 'Open navigation menu' : 'Close navigation menu'}
+              aria-expanded={!sidebarCollapsed}
+              aria-controls="sub-editor-sidebar"
+            >
+              <Icon name={sidebarCollapsed ? 'menu' : 'close'} size={20} />
+            </button>
+            <div className="team-header-brand">
+              <span className="team-header-brand-mark">A</span>
+              <span><strong>AROWIN</strong><small>Sub Editor</small></span>
+            </div>
+            <span className="team-header-divider" />
+            <span className="team-header-page">{currentPageTitle}</span>
+          </div>
           <div className="topbar-tools">
             <div className="search-wrap">
               <Icon name="search" size={19} />
@@ -166,8 +269,8 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
             <div className="notification-wrap">
               <button
                 type="button"
-                className={`notification-button${activities.length ? ' has-notifications' : ''}`}
-                aria-label="Notifications"
+                className={`notification-button${activities.length || ticketsNeedingAttention.length ? ' has-notifications' : ''}`}
+                aria-label={`Notifications${ticketsNeedingAttention.length ? `, ${ticketsNeedingAttention.length} support tickets need attention` : ''}`}
                 aria-expanded={showNotifications}
                 onClick={() => {
                   setShowNotifications((value) => !value)
@@ -175,38 +278,76 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
                 }}
               >
                 <Icon name="bell" size={21} />
-                {activities.length > 0 && <span className="notification-dot" />}
+                {(activities.length > 0 || ticketsNeedingAttention.length > 0) && <span className="notification-dot" />}
               </button>
               {showNotifications && (
                 <div className="notification-popover">
                   <strong>Notifications</strong>
-                  {activities.length ? <p>{activities.length} employee update{activities.length === 1 ? '' : 's'} recorded.</p> : <p>You’re all caught up.</p>}
+                  {supportLoadError && <p className="support-notification-error" role="alert">{supportLoadError}</p>}
+                  {ticketsNeedingAttention.length > 0 && (
+                    <button
+                      type="button"
+                      className="support-notification-link"
+                      onClick={() => {
+                        setShowNotifications(false)
+                        onNavigate('/support-tickets')
+                      }}
+                    >
+                      <span className="support-notification-icon"><Icon name="headset" size={17} /></span>
+                      <span>
+                        <b>{ticketsNeedingAttention.length} support ticket{ticketsNeedingAttention.length === 1 ? '' : 's'} need attention</b>
+                        <small>Open the support inbox to respond</small>
+                      </span>
+                      <Icon name="chevron" size={16} />
+                    </button>
+                  )}
+                  {activities.length > 0 && <p>{activities.length} employee update{activities.length === 1 ? '' : 's'} recorded.</p>}
+                  {!ticketsNeedingAttention.length && !activities.length && !supportLoadError && <p>You’re all caught up.</p>}
                 </div>
               )}
             </div>
-            <div className="profile-menu">
+            <div className="profile-menu" ref={profileMenuRef}>
               <button
                 type="button"
-                className="profile-trigger"
+                className="role-profile-trigger"
                 onClick={() => {
                   setShowProfileMenu((value) => !value)
                   setShowNotifications(false)
                 }}
                 aria-expanded={showProfileMenu}
+                aria-haspopup="true"
+                aria-label={`Profile menu for ${currentUserName}`}
               >
                 <span className="profile-avatar">{currentUserName[0]?.toUpperCase() || 'A'}</span>
-                <span className="profile-name">{currentUserName}</span>
+                <span className="role-profile-copy"><strong>{currentUserName}</strong><small>Sub Editor</small></span>
                 <Icon name="down" size={15} />
               </button>
               {showProfileMenu && (
-                <div className="profile-dropdown">
-                  <button type="button" onClick={onLogout}>Sign out</button>
+                <div className="role-profile-dropdown">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProfileMenu(false)
+                      onNavigate('/settings')
+                    }}
+                  >
+                    <Icon name="settings" size={17} />
+                    <span>Settings</span>
+                  </button>
+                  <button type="button" className="role-profile-signout" onClick={onLogout}>
+                    <Icon name="logout" size={17} />
+                    <span>Sign out</span>
+                  </button>
                 </div>
               )}
             </div>
           </div>
-        </div>
+        </header>
 
+        <button type="button" className="team-content-back sub-editor-content-back" onClick={onBack}>
+          <Icon name="back" size={17} />
+          <span>Back</span>
+        </button>
         {dataLoadError && <p className="dashboard-data-error workspace-data-error" role="alert">{dataLoadError}</p>}
         {pageContent}
       </main>

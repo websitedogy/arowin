@@ -9,9 +9,18 @@ use Arowin\Modules\Auth\AuthController;
 use Arowin\Modules\Attendance\AttendanceController;
 use Arowin\Modules\Budget\BudgetController;
 use Arowin\Modules\Credentials\CredentialDeliveryService;
+use Arowin\Modules\DailyActivities\DailyActivityController;
 use Arowin\Modules\Dashboard\DashboardController;
 use Arowin\Modules\Employees\EmployeeController;
+use Arowin\Modules\Employees\EmployeeKycController;
+use Arowin\Modules\Leave\LeaveController;
+use Arowin\Modules\Leads\LeadController;
 use Arowin\Modules\TeamAssignments\TeamAssignmentController;
+use Arowin\Modules\Targets\SalesTargetController;
+use Arowin\Modules\Sales\SalesController;
+use Arowin\Modules\Sales\UnlockOtpController;
+use Arowin\Modules\Support\SupportController;
+use Arowin\Shared\AppTime;
 
 $allowedOrigins = array_filter(array_map(
     'trim',
@@ -107,6 +116,56 @@ try {
         jsonResponse(['success' => true, 'user' => $_SESSION['user']]);
     }
 
+    if ($path === '/api/employee-kyc' && in_array($method, ['GET', 'POST'], true)) {
+        $userId = requireKycEmployee();
+        header('Cache-Control: private, no-store');
+        $kyc = new EmployeeKycController(Database::connect());
+        if ($method === 'GET') {
+            jsonResponse(['success' => true, 'kyc' => $kyc->get($userId)]);
+        }
+        jsonResponse([
+            'success' => true,
+            'kyc' => $kyc->submit(
+                $userId,
+                $_POST,
+                $_FILES['aadhaar_document'] ?? null,
+                $_FILES['pan_document'] ?? null
+            ),
+            'message' => 'Your KYC details have been submitted securely.',
+        ]);
+    }
+
+    if ($path === '/api/auth/profile-image' && in_array($method, ['GET', 'POST'], true)) {
+        requireAuthenticated();
+        if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
+            jsonResponse(['success' => false, 'message' => 'Only employees can manage a profile photo.'], 403);
+        }
+
+        $auth = new AuthController(Database::connect());
+        if ($method === 'POST') {
+            $auth->updateProfileImage((int) $_SESSION['user']['id'], $_FILES['profile_image'] ?? null);
+            $user = $auth->currentUser((int) $_SESSION['user']['id']);
+            if ($user === null) {
+                unset($_SESSION['user']);
+                jsonResponse(['success' => false, 'message' => 'Sign in to continue.'], 401);
+            }
+            $_SESSION['user'] = $user;
+            jsonResponse(['success' => true, 'user' => $user, 'message' => 'Profile photo updated.']);
+        }
+
+        $image = $auth->profileImage((int) $_SESSION['user']['id']);
+        if ($image === null) {
+            jsonResponse(['success' => false, 'message' => 'No profile photo has been uploaded.'], 404);
+        }
+
+        header('Content-Type: ' . $image['mimeType']);
+        header('Content-Length: ' . (string) filesize($image['path']));
+        header('Cache-Control: private, no-store');
+        header('X-Content-Type-Options: nosniff');
+        readfile($image['path']);
+        exit;
+    }
+
     if ($path === '/api/employees' && $method === 'GET') {
         requireSubEditor();
         $employees = (new EmployeeController(Database::connect()))->listEmployees();
@@ -125,6 +184,29 @@ try {
             'activity' => $created['activity'],
             'emailDelivery' => $created['emailDelivery'],
         ], 201);
+    }
+
+    if ($path === '/api/budget' && $method === 'GET') {
+        requireSubEditor();
+        jsonResponse(['success' => true, 'budget' => (new BudgetController(Database::connect()))->summary()]);
+    }
+
+    if ($path === '/api/budget/company' && $method === 'POST') {
+        requireSubEditor();
+        $budget = (new BudgetController(Database::connect()))->saveCompanyBudget(
+            parseJsonBody(),
+            (int) $_SESSION['user']['id']
+        );
+        jsonResponse(['success' => true, 'budget' => $budget]);
+    }
+
+    if ($path === '/api/budget/allocations' && $method === 'POST') {
+        requireSubEditor();
+        $result = (new BudgetController(Database::connect()))->saveAllocations(
+            parseJsonBody(),
+            (int) $_SESSION['user']['id']
+        );
+        jsonResponse(['success' => true] + $result);
     }
 
     if ($path === '/api/budget/salaries' && $method === 'GET') {
@@ -174,6 +256,167 @@ try {
         jsonResponse(['success' => true]);
     }
 
+    if ($path === '/api/leave-requests' && $method === 'GET') {
+        requireAuthenticated();
+        $userId = $_SESSION['user']['role'] === 'sub_editor'
+            ? null
+            : requireLeaveApplicant();
+        jsonResponse([
+            'success' => true,
+            'requests' => (new LeaveController(Database::connect()))->listRequests($userId),
+        ]);
+    }
+
+    if ($path === '/api/leave-requests' && $method === 'POST') {
+        $userId = requireLeaveApplicant();
+        $request = (new LeaveController(Database::connect()))->apply($userId, parseJsonBody());
+        jsonResponse(['success' => true, 'request' => $request], 201);
+    }
+
+    if (is_string($path) && preg_match('#^/api/leave-requests/([1-9][0-9]*)/decision$#', $path, $matches) && $method === 'POST') {
+        requireSubEditor();
+        $payload = parseJsonBody();
+        (new LeaveController(Database::connect()))->decide(
+            (int) $matches[1],
+            (int) $_SESSION['user']['id'],
+            is_string($payload['decision'] ?? null) ? $payload['decision'] : ''
+        );
+        jsonResponse(['success' => true]);
+    }
+
+    if ($path === '/api/support/tickets' && $method === 'GET') {
+        requireAuthenticated();
+        $role = (string) $_SESSION['user']['role'];
+        if (!in_array($role, ['sub_editor', 'team_leader', 'telecaller'], true)) {
+            jsonResponse(['success' => false, 'message' => 'You do not have permission to access support tickets.'], 403);
+        }
+        jsonResponse([
+            'success' => true,
+            'tickets' => (new SupportController(Database::connect()))->listTickets(
+                $role === 'sub_editor' ? null : (int) $_SESSION['user']['id']
+            ),
+        ]);
+    }
+
+    if ($path === '/api/support/tickets' && $method === 'POST') {
+        requireAuthenticated();
+        $userId = requireSupportEmployee();
+        $ticketId = (new SupportController(Database::connect()))->createTicket($userId, parseJsonBody());
+        jsonResponse(['success' => true, 'ticketId' => $ticketId], 201);
+    }
+
+    if (is_string($path) && preg_match('#^/api/support/tickets/([1-9][0-9]*)$#', $path, $matches) && $method === 'GET') {
+        requireAuthenticated();
+        $role = (string) $_SESSION['user']['role'];
+        if (!in_array($role, ['sub_editor', 'team_leader', 'telecaller'], true)) {
+            jsonResponse(['success' => false, 'message' => 'You do not have permission to access support tickets.'], 403);
+        }
+        jsonResponse([
+            'success' => true,
+            'ticket' => (new SupportController(Database::connect()))->getTicket(
+                (int) $matches[1],
+                (int) $_SESSION['user']['id'],
+                $role === 'sub_editor'
+            ),
+        ]);
+    }
+
+    if (is_string($path) && preg_match('#^/api/support/tickets/([1-9][0-9]*)/messages$#', $path, $matches) && $method === 'POST') {
+        requireAuthenticated();
+        $role = (string) $_SESSION['user']['role'];
+        if (!in_array($role, ['sub_editor', 'team_leader', 'telecaller'], true)) {
+            jsonResponse(['success' => false, 'message' => 'You do not have permission to reply to support tickets.'], 403);
+        }
+        (new SupportController(Database::connect()))->reply(
+            (int) $matches[1],
+            (int) $_SESSION['user']['id'],
+            $role === 'sub_editor',
+            parseJsonBody()
+        );
+        jsonResponse(['success' => true]);
+    }
+
+    if ($path === '/api/daily-activities' && $method === 'GET') {
+        requireAuthenticated();
+        $userId = $_SESSION['user']['role'] === 'sub_editor'
+            ? null
+            : requireDailyActivityEmployee();
+        jsonResponse([
+            'success' => true,
+            'activities' => (new DailyActivityController(Database::connect()))->listActivities($userId),
+        ]);
+    }
+
+    if ($path === '/api/daily-activities' && $method === 'POST') {
+        $userId = requireDailyActivityEmployee();
+        $activity = (new DailyActivityController(Database::connect()))->submit(
+            $userId,
+            $_POST,
+            $_FILES['screenshots'] ?? null,
+            $_FILES['videos'] ?? null
+        );
+        jsonResponse(['success' => true, 'activity' => $activity], 201);
+    }
+
+    if (is_string($path) && preg_match('#^/api/daily-activities/([1-9][0-9]*)/decision$#', $path, $matches) && $method === 'POST') {
+        requireSubEditor();
+        $payload = parseJsonBody();
+        (new DailyActivityController(Database::connect()))->decide(
+            (int) $matches[1],
+            (int) $_SESSION['user']['id'],
+            is_string($payload['decision'] ?? null) ? $payload['decision'] : '',
+            is_string($payload['reason'] ?? null) ? $payload['reason'] : null
+        );
+        jsonResponse(['success' => true]);
+    }
+
+    if (is_string($path) && preg_match('#^/api/daily-activities/([1-9][0-9]*)/verify$#', $path, $matches) && $method === 'POST') {
+        requireSubEditor();
+        (new DailyActivityController(Database::connect()))->verify(
+            (int) $matches[1],
+            (int) $_SESSION['user']['id']
+        );
+        jsonResponse(['success' => true]);
+    }
+
+    if (is_string($path) && preg_match('#^/api/daily-activities/([1-9][0-9]*)/screenshots/([1-9][0-9]*)$#', $path, $matches) && $method === 'GET') {
+        requireAuthenticated();
+        $userId = $_SESSION['user']['role'] === 'sub_editor'
+            ? null
+            : requireDailyActivityEmployee();
+        $screenshot = (new DailyActivityController(Database::connect()))->screenshot(
+            (int) $matches[2],
+            (int) $matches[1],
+            $userId
+        );
+        header('Content-Type: ' . $screenshot['mimeType']);
+        header('Content-Disposition: inline; filename*=UTF-8\'\'' . rawurlencode($screenshot['name']));
+        header('Content-Length: ' . (string) filesize($screenshot['path']));
+        header('Cache-Control: private, no-store');
+        header('X-Content-Type-Options: nosniff');
+        readfile($screenshot['path']);
+        exit;
+    }
+
+    if (is_string($path) && preg_match('#^/api/daily-activities/([1-9][0-9]*)/videos/([1-9][0-9]*)$#', $path, $matches) && $method === 'GET') {
+        requireAuthenticated();
+        $userId = $_SESSION['user']['role'] === 'sub_editor'
+            ? null
+            : requireDailyActivityEmployee();
+        $video = (new DailyActivityController(Database::connect()))->video(
+            (int) $matches[2],
+            (int) $matches[1],
+            $userId
+        );
+        header('Content-Type: ' . $video['mimeType']);
+        header('Content-Disposition: inline; filename*=UTF-8\'\'' . rawurlencode($video['name']));
+        header('Content-Length: ' . (string) filesize($video['path']));
+        header('Cache-Control: private, no-store');
+        header('X-Content-Type-Options: nosniff');
+        readfile($video['path']);
+        exit;
+    }
+
     if ($path === '/api/attendance/me' && $method === 'GET') {
         requireAttendanceEmployee();
         jsonResponse([
@@ -186,7 +429,7 @@ try {
         requireAttendanceEmployee();
         $month = isset($_GET['month']) && is_string($_GET['month'])
             ? $_GET['month']
-            : (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('Y-m');
+            : AppTime::now()->format('Y-m');
         jsonResponse([
             'success' => true,
             'history' => (new AttendanceController(Database::connect()))->history(
@@ -230,6 +473,206 @@ try {
         requireSubEditor();
         $assignments = new TeamAssignmentController(Database::connect());
         jsonResponse(['success' => true, 'teamLeaders' => $assignments->listTeamLeaders()]);
+    }
+
+    if ($path === '/api/sales-targets' && $method === 'GET') {
+        requireSubEditor();
+        $targets = new SalesTargetController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'targets' => $targets->listMonthlyTargets((string) ($_GET['month'] ?? date('Y-m'))),
+        ]);
+    }
+
+    if (is_string($path) && preg_match('#^/api/sales-targets/([1-9][0-9]*)$#', $path, $matches) && $method === 'POST') {
+        requireSubEditor();
+        $targets = new SalesTargetController(Database::connect());
+        $payload = parseJsonBody();
+        $confirmationPassword = is_string($payload['password'] ?? null) ? $payload['password'] : '';
+        if (!$targets->verifySubEditorPassword(
+            (int) $_SESSION['user']['id'],
+            $confirmationPassword
+        )) {
+            jsonResponse(['success' => false, 'message' => 'The Sub Editor password is incorrect.'], 403);
+        }
+
+        jsonResponse([
+            'success' => true,
+            'target' => $targets->saveMonthlyTarget(
+                (int) $matches[1],
+                $payload,
+                (int) $_SESSION['user']['id']
+            ),
+        ]);
+    }
+
+    if ($path === '/api/sales/performance' && $method === 'GET') {
+        requireAuthenticated();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'performance' => $sales->performance(
+                (int) $_SESSION['user']['id'],
+                (string) $_SESSION['user']['role'],
+                (string) ($_GET['month'] ?? AppTime::now()->format('Y-m'))
+            ),
+        ]);
+    }
+
+    if ($path === '/api/leads' && in_array($method, ['GET', 'POST'], true)) {
+        requireAuthenticated();
+        if ($_SESSION['user']['role'] !== 'telecaller') {
+            jsonResponse(['success' => false, 'message' => 'Only Telecallers can manage their leads.'], 403);
+        }
+
+        $leads = new LeadController(Database::connect());
+        if ($method === 'GET') {
+            jsonResponse([
+                'success' => true,
+                'leads' => $leads->listForTelecaller((int) $_SESSION['user']['id']),
+            ]);
+        }
+
+        jsonResponse([
+            'success' => true,
+            'lead' => $leads->create((int) $_SESSION['user']['id'], parseJsonBody()),
+        ], 201);
+    }
+
+    if ($path === '/api/sales/summary' && $method === 'GET') {
+        requireSubEditor();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'summary' => $sales->subEditorSummary((string) ($_GET['period'] ?? 'total')),
+        ]);
+    }
+
+    if ($path === '/api/sales/packages' && $method === 'GET') {
+        requireAuthenticated();
+        if (!in_array($_SESSION['user']['role'], ['sub_editor', 'telecaller', 'team_leader'], true)) {
+            jsonResponse(['success' => false, 'message' => 'You do not have permission to view unlock packages.'], 403);
+        }
+        $sales = new SalesController(Database::connect());
+        jsonResponse(['success' => true, 'packages' => $sales->listUnlockPackages()]);
+    }
+
+    if ($path === '/api/sales/packages/incentives' && $method === 'POST') {
+        requireSubEditor();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'packages' => $sales->configureUnlockPackages(
+                parseJsonBody(),
+                (int) $_SESSION['user']['id']
+            ),
+        ]);
+    }
+
+    if ($path === '/api/sales/unlocks/me' && $method === 'GET') {
+        requireSalesEmployee();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'result' => $sales->employeeUnlockSales((int) $_SESSION['user']['id']),
+        ]);
+    }
+
+    if ($path === '/api/sales/unlocks' && $method === 'POST') {
+        requireSalesEmployee();
+        $verified = $_SESSION['unlock_sales_otp_verified'] ?? null;
+        if (
+            !is_array($verified)
+            || (int) ($verified['userId'] ?? 0) !== (int) $_SESSION['user']['id']
+            || (int) ($verified['expiresAt'] ?? 0) < time()
+        ) {
+            unset($_SESSION['unlock_sales_otp_verified']);
+            jsonResponse(['success' => false, 'message' => 'Verify the email OTP before submitting a sale for approval.'], 409);
+        }
+        $sales = new SalesController(Database::connect());
+        unset($_SESSION['unlock_sales_otp_verified']);
+        $sale = $sales->submitUnlockSale();
+        jsonResponse(['success' => true, 'sale' => $sale], 201);
+    }
+
+    if ($path === '/api/sales/unlocks' && $method === 'GET') {
+        requireSubEditor();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'result' => $sales->listUnlockSalesForReview((string) ($_GET['status'] ?? 'all')),
+        ]);
+    }
+
+    if (is_string($path) && preg_match('#^/api/sales/unlocks/([1-9][0-9]*)/review$#', $path, $matches) && $method === 'POST') {
+        requireSubEditor();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'sale' => $sales->reviewUnlockSale(
+                (int) $matches[1],
+                parseJsonBody(),
+                (int) $_SESSION['user']['id']
+            ),
+        ]);
+    }
+
+    if ($path === '/api/sales/incentives/me' && $method === 'GET') {
+        requireSalesEmployee();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'result' => $sales->employeeIncentives((int) $_SESSION['user']['id']),
+        ]);
+    }
+
+    if ($path === '/api/sales/team-achievements' && $method === 'GET') {
+        requireSalesEmployee();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'result' => $sales->teamUnlockAchievements(
+                (int) $_SESSION['user']['id'],
+                (string) $_SESSION['user']['role']
+            ),
+        ]);
+    }
+
+    if ($path === '/api/sales/incentives/earned' && $method === 'GET') {
+        requireSubEditor();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'result' => $sales->subEditorEarnedIncentives(),
+        ]);
+    }
+
+    if ($path === '/api/sales/daily' && $method === 'POST') {
+        requireAuthenticated();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'sale' => $sales->saveDailySales(
+                (int) $_SESSION['user']['id'],
+                (string) $_SESSION['user']['role'],
+                parseJsonBody()
+            ),
+        ]);
+    }
+
+    if ($path === '/api/sales/unlock-otp/send' && $method === 'POST') {
+        requireSalesEmployee();
+        (new UnlockOtpController(Database::connect()))->send((int) $_SESSION['user']['id']);
+        jsonResponse(['success' => true, 'message' => 'A verification code has been sent to your employee email.']);
+    }
+
+    if ($path === '/api/sales/unlock-otp/verify' && $method === 'POST') {
+        requireSalesEmployee();
+        (new UnlockOtpController(Database::connect()))->verify(
+            (int) $_SESSION['user']['id'],
+            parseJsonBody()
+        );
+        jsonResponse(['success' => true, 'message' => 'Email verification complete.']);
     }
 
     if (is_string($path) && preg_match('#^/api/team-assignments/([1-9][0-9]*)/available-telecallers$#', $path, $matches) && $method === 'GET') {
@@ -334,4 +777,55 @@ function requireAttendanceEmployee(): void
     if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
         jsonResponse(['success' => false, 'message' => 'Only Team Leaders and Telecallers can mark attendance.'], 403);
     }
+}
+
+function requireLeaveApplicant(): int
+{
+    requireAuthenticated();
+
+    if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
+        jsonResponse(['success' => false, 'message' => 'Only Team Leaders and Telecallers can apply for leave.'], 403);
+    }
+
+    return (int) $_SESSION['user']['id'];
+}
+
+function requireKycEmployee(): int
+{
+    requireAuthenticated();
+
+    if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
+        jsonResponse(['success' => false, 'message' => 'Employee KYC is available to Team Leaders and Telecallers only.'], 403);
+    }
+
+    return (int) $_SESSION['user']['id'];
+}
+
+function requireDailyActivityEmployee(): int
+{
+    requireAuthenticated();
+
+    if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
+        jsonResponse(['success' => false, 'message' => 'Only Team Leaders and Telecallers can submit daily activities.'], 403);
+    }
+
+    return (int) $_SESSION['user']['id'];
+}
+
+function requireSalesEmployee(): void
+{
+    requireAuthenticated();
+
+    if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
+        jsonResponse(['success' => false, 'message' => 'Only Team Leaders and Telecallers can submit unlock sales.'], 403);
+    }
+}
+
+function requireSupportEmployee(): int
+{
+    if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
+        jsonResponse(['success' => false, 'message' => 'Only Team Leaders and Telecallers can raise support tickets.'], 403);
+    }
+
+    return (int) $_SESSION['user']['id'];
 }

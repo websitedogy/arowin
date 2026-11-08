@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Arowin\Modules\Attendance;
 
+use Arowin\Shared\AppTime;
 use DateTimeImmutable;
-use DateTimeZone;
 use DomainException;
 use InvalidArgumentException;
 use PDO;
@@ -14,7 +14,6 @@ use RuntimeException;
 
 final class AttendanceController
 {
-    private const TIME_ZONE = 'Asia/Kolkata';
     private const OFFICE_RADIUS_METERS = 200;
     private const CHECKIN_FROM = '00:00:00';
     private const CHECKIN_UNTIL = '10:30:00';
@@ -60,7 +59,7 @@ final class AttendanceController
     {
         $date = trim((string) ($payload['date'] ?? ''));
         $name = trim((string) ($payload['name'] ?? ''));
-        $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date, new DateTimeZone(self::TIME_ZONE));
+        $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date, AppTime::timeZone());
         if ($parsedDate === false || $parsedDate->format('Y-m-d') !== $date) {
             throw new InvalidArgumentException('Choose a valid holiday date.');
         }
@@ -84,7 +83,7 @@ final class AttendanceController
 
     public function deleteHoliday(string $date): void
     {
-        $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date, new DateTimeZone(self::TIME_ZONE));
+        $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date, AppTime::timeZone());
         if ($parsedDate === false || $parsedDate->format('Y-m-d') !== $date) {
             throw new InvalidArgumentException('Choose a valid holiday date.');
         }
@@ -119,6 +118,8 @@ final class AttendanceController
             'monthlySalary' => $salary,
             'dailySalary' => $monthDetails['dailySalary'],
             'earned' => $monthDetails['earned'],
+            'activityBonus' => $monthDetails['activityBonus'],
+            'leaveDeductions' => $monthDetails['leaveDeductions'],
             'lateDeductions' => $monthDetails['lateDeductions'],
             'remainingPayable' => $monthDetails['remainingPayable'],
             'attendedDays' => $monthDetails['attendedDays'],
@@ -132,6 +133,7 @@ final class AttendanceController
             ] : null,
             'todayIsHoliday' => $todayDetails['status'] === 'H',
             'todayHolidayName' => $todayDetails['holidayName'],
+            'todayIsApprovedLeave' => $todayDetails['status'] === 'leave',
             'todayIsSunday' => $todayDetails['isSunday'],
             'officeConfigured' => $location !== null,
             'officeAddress' => $location['address'] ?? null,
@@ -172,6 +174,7 @@ final class AttendanceController
 
         $date = $now->format('Y-m-d');
         $this->assertWorkingDay($date);
+        $this->assertNotOnApprovedLeave($userId, $date);
         $this->assertEmployeeHasSalary($userId, $date);
         $location = $this->validateOfficeDistance($payload);
         $selfiePath = $this->saveSelfie($payload['selfie'] ?? null, $userId, $date, 'in');
@@ -279,7 +282,7 @@ final class AttendanceController
 
     private function monthDetails(int $userId, string $month, ?float $salary, ?string $joiningDate): array
     {
-        $timeZone = new DateTimeZone(self::TIME_ZONE);
+        $timeZone = AppTime::timeZone();
         $monthStart = DateTimeImmutable::createFromFormat('!Y-m-d', $month . '-01', $timeZone);
         if ($monthStart === false) {
             throw new InvalidArgumentException('Choose a valid attendance month.');
@@ -317,10 +320,56 @@ final class AttendanceController
             $holidays[$holiday['holiday_date']] = (string) $holiday['name'];
         }
 
+        $nextMonthStart = $monthEnd->modify('+1 day');
+        $activityBonusQuery = $this->database->prepare(
+            "SELECT DATE(a.submitted_at) AS activity_date, COUNT(s.id) AS verified_posts
+             FROM daily_activities a
+             JOIN daily_activity_screenshots s ON s.activity_id = a.id
+             WHERE a.user_id = :user_id
+               AND a.status = 'verified'
+               AND a.platform IN ('Instagram', 'Facebook', 'WhatsApp Status')
+               AND a.submitted_at >= :month_start
+               AND a.submitted_at < :next_month_start
+             GROUP BY DATE(a.submitted_at)"
+        );
+        $activityBonusQuery->execute([
+            'user_id' => $userId,
+            'month_start' => $monthStart->format('Y-m-d'),
+            'next_month_start' => $nextMonthStart->format('Y-m-d'),
+        ]);
+        $verifiedSocialPosts = [];
+        foreach ($activityBonusQuery->fetchAll(PDO::FETCH_ASSOC) as $activityBonusRow) {
+            $verifiedSocialPosts[(string) $activityBonusRow['activity_date']] = (int) $activityBonusRow['verified_posts'];
+        }
+
+        $leaveQuery = $this->database->prepare(
+            "SELECT start_date, end_date
+             FROM leave_requests
+             WHERE user_id = :user_id
+               AND status = 'approved'
+               AND start_date <= :month_end
+               AND end_date >= :month_start"
+        );
+        $leaveQuery->execute([
+            'user_id' => $userId,
+            'month_start' => $monthStart->format('Y-m-d'),
+            'month_end' => $monthEnd->format('Y-m-d'),
+        ]);
+        $approvedLeaveDays = [];
+        foreach ($leaveQuery->fetchAll(PDO::FETCH_ASSOC) as $leave) {
+            $leaveStart = new DateTimeImmutable(max($leave['start_date'], $monthStart->format('Y-m-d')), $timeZone);
+            $leaveEnd = new DateTimeImmutable(min($leave['end_date'], $monthEnd->format('Y-m-d')), $timeZone);
+            for ($leaveDate = $leaveStart; $leaveDate <= $leaveEnd; $leaveDate = $leaveDate->modify('+1 day')) {
+                $approvedLeaveDays[$leaveDate->format('Y-m-d')] = true;
+            }
+        }
+
         $now = $this->now();
         $today = $now->format('Y-m-d');
         $dailySalary = $salary === null ? null : $salary / (int) $monthEnd->format('d');
         $earnedTotal = 0.0;
+        $activityBonusTotal = 0.0;
+        $leaveDeductions = 0.0;
         $lateDeductions = 0.0;
         $attendedDays = 0;
         $days = [];
@@ -339,12 +388,14 @@ final class AttendanceController
 
             if ($isHoliday) {
                 $status = 'H';
-            } elseif ($isFuture) {
-                $status = 'future';
             } elseif ($beforeJoining) {
                 $status = 'not-joined';
             } elseif ($isComplete) {
                 $status = 'present';
+            } elseif (isset($approvedLeaveDays[$dateString])) {
+                $status = 'leave';
+            } elseif ($isFuture) {
+                $status = 'future';
             } elseif (is_array($record)) {
                 $status = 'incomplete';
             } elseif ($dateString === $today && $now->format('H:i:s') < self::CHECKIN_UNTIL) {
@@ -357,6 +408,13 @@ final class AttendanceController
             $dailyEarned = $salary === null ? null : ($isPaidDay ? round($dailySalary, 2) : 0.0);
             if ($isPaidDay && $dailySalary !== null) {
                 $earnedTotal += $dailySalary;
+            }
+            $dailyActivityBonus = !$beforeJoining && !$isFuture
+                ? min(6.0, ($verifiedSocialPosts[$dateString] ?? 0) * 2.0)
+                : 0.0;
+            $activityBonusTotal += $dailyActivityBonus;
+            if (isset($approvedLeaveDays[$dateString]) && !$isHoliday && !$beforeJoining && !$isFuture && !$isComplete && $dailySalary !== null) {
+                $leaveDeductions += $dailySalary;
             }
 
             $lateDeduction = is_array($record) ? (float) $record['late_deduction'] : 0.0;
@@ -376,10 +434,12 @@ final class AttendanceController
                 'checkOutAt' => is_array($record) ? $record['check_out_at'] : null,
                 'lateDeduction' => $lateDeduction,
                 'earned' => $dailyEarned,
+                'activityBonus' => $dailyActivityBonus,
             ];
         }
 
         $earned = $salary === null ? null : min($salary, round($earnedTotal, 2));
+        $activityBonusTotal = round($activityBonusTotal, 2);
         $lateDeductions = round($lateDeductions, 2);
 
         return [
@@ -387,8 +447,12 @@ final class AttendanceController
             'monthlySalary' => $salary,
             'dailySalary' => $dailySalary,
             'earned' => $earned,
+            'activityBonus' => $activityBonusTotal,
+            'leaveDeductions' => $salary === null ? null : round($leaveDeductions, 2),
             'lateDeductions' => $lateDeductions,
-            'remainingPayable' => $earned === null ? null : max(0, round($earned - $lateDeductions, 2)),
+            'remainingPayable' => $earned === null
+                ? null
+                : max(0, round($earned + $activityBonusTotal - $lateDeductions, 2)),
             'attendedDays' => $attendedDays,
             'days' => $days,
         ];
@@ -396,7 +460,7 @@ final class AttendanceController
 
     private function assertWorkingDay(string $date): void
     {
-        $day = new DateTimeImmutable($date, new DateTimeZone(self::TIME_ZONE));
+        $day = new DateTimeImmutable($date, AppTime::timeZone());
         if ($day->format('w') === '0') {
             throw new DomainException('Attendance is not required on Sundays. Sunday is a paid holiday.');
         }
@@ -408,6 +472,26 @@ final class AttendanceController
         $holidayName = $statement->fetchColumn();
         if (is_string($holidayName)) {
             throw new DomainException(sprintf('Attendance is not required on %s. This is a paid holiday.', $holidayName));
+        }
+    }
+
+    private function assertNotOnApprovedLeave(int $userId, string $date): void
+    {
+        $statement = $this->database->prepare(
+            "SELECT id FROM leave_requests
+             WHERE user_id = :user_id
+               AND status = 'approved'
+               AND start_date <= :start_date
+               AND end_date >= :end_date
+             LIMIT 1"
+        );
+        $statement->execute([
+            'user_id' => $userId,
+            'start_date' => $date,
+            'end_date' => $date,
+        ]);
+        if ($statement->fetchColumn() !== false) {
+            throw new DomainException('You have approved leave today. Attendance cannot be marked for this date.');
         }
     }
 
@@ -532,6 +616,6 @@ final class AttendanceController
 
     private function now(): DateTimeImmutable
     {
-        return new DateTimeImmutable('now', new DateTimeZone(self::TIME_ZONE));
+        return AppTime::now();
     }
 }

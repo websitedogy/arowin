@@ -27,6 +27,7 @@ const statusLabels = {
   present: 'Present',
   H: 'Holiday',
   incomplete: 'Incomplete',
+  leave: 'Leave · Unpaid',
   absent: 'Absent',
   pending: 'Pending',
   future: '—',
@@ -104,6 +105,8 @@ export default function AttendanceHistory({ initialMonth, refreshToken }) {
           <div className="attendance-history-summary">
             <span>Completed work days <strong>{history.attendedDays}</strong></span>
             <span>Earned <strong>{currency(history.earned)}</strong></span>
+            <span>Daily activity bonus <strong>{currency(history.activityBonus)}</strong></span>
+            <span>Approved leave cut-off <strong>{currency(history.leaveDeductions)}</strong></span>
             <span>Cut-off <strong>{currency(history.remainingPayable)}</strong></span>
           </div>
 
@@ -118,8 +121,8 @@ export default function AttendanceHistory({ initialMonth, refreshToken }) {
               <div
                 className={`attendance-calendar-day is-${day.status}`}
                 key={day.date}
-                title={`${day.date} · ${day.holidayName || statusLabels[day.status]}`}
-                aria-label={`${day.date}: ${day.holidayName || statusLabels[day.status]}`}
+                title={`${day.date} · ${day.holidayName || statusLabels[day.status] || 'Unknown'}`}
+                aria-label={`${day.date}: ${day.holidayName || statusLabels[day.status] || 'Unknown'}`}
               >
                 <strong>{Number(day.date.slice(-2))}</strong>
                 <span>{day.status === 'H' ? 'H' : statusLabels[day.status]}</span>
@@ -131,12 +134,13 @@ export default function AttendanceHistory({ initialMonth, refreshToken }) {
             <span><i className="is-holiday" /> H · Paid holiday</span>
             <span><i className="is-incomplete" /> Incomplete</span>
             <span><i className="is-absent" /> Absent</span>
+            <span><i className="is-leave" /> Approved leave · Unpaid</span>
           </div>
 
           <div className="attendance-history-table-wrap">
             <table className="attendance-history-table">
               <thead>
-                <tr><th>Date</th><th>Status</th><th>Check-in</th><th>Check-out</th><th>Late deduction</th><th>Earned</th></tr>
+                <tr><th>Date</th><th>Status</th><th>Check-in</th><th>Check-out</th><th>Late deduction</th><th>Activity bonus</th><th>Earned</th></tr>
               </thead>
               <tbody>
                 {history.days.map((day) => (
@@ -150,6 +154,7 @@ export default function AttendanceHistory({ initialMonth, refreshToken }) {
                     <td>{formatTime(day.checkInAt)}</td>
                     <td>{formatTime(day.checkOutAt)}</td>
                     <td>{day.lateDeduction ? currency(day.lateDeduction) : '—'}</td>
+                    <td>{day.activityBonus ? currency(day.activityBonus) : '—'}</td>
                     <td>{currency(day.earned)}</td>
                   </tr>
                 ))}

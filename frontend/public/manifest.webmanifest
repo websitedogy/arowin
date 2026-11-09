@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "AROWIN",
+  "short_name": "AROWIN",
+  "description": "AROWIN employee workspace",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f3f6fb",
+  "theme_color": "#175fc0",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -10,13 +10,13 @@ import SubEditorLayout from './features/dashboard/SubEditorLayout'
 import RoleDashboard from './features/dashboard/RoleDashboard'
 import TargetSetupPage from './features/dashboard/TargetSetupPage'
 import EmployeeDirectoryPage from './features/employees/EmployeeDirectoryPage'
+import EmployeeKycPage from './features/employees/EmployeeKycPage'
 import BudgetDashboard from './features/budget/BudgetDashboard'
 import SalaryManagementPage from './features/budget/SalaryManagementPage'
 import OfficeLocationSetup from './features/attendance/OfficeLocationSetup'
 import LeaveManagementPage from './features/leave/LeaveManagementPage'
 import DailyActivitiesPage from './features/activities/DailyActivitiesPage'
 import SalesReviewPage from './features/sales/SalesReviewPage'
-import PackageIncentiveSetupPage from './features/sales/PackageIncentiveSetupPage'
 import EarnedIncentivesPage from './features/sales/EarnedIncentivesPage'
 import SalesSummaryPage from './features/sales/SalesSummaryPage'
 import SettingsPage from './features/settings/SettingsPage'
@@ -138,7 +138,11 @@ function App() {
           }
 
           if (currentPath === '/settings') {
-            return <SettingsPage user={user} />
+            return <SettingsPage />
+          }
+
+          if (currentPath === '/employee-kyc') {
+            return <EmployeeKycPage user={user} />
           }
 
           if (currentPath === '/budget') {
@@ -174,7 +178,7 @@ function App() {
           }
 
           if (currentPath === '/incentives/packages') {
-            return <PackageIncentiveSetupPage />
+            return <SettingsPage />
           }
 
           if (currentPath === '/incentives/earned') {

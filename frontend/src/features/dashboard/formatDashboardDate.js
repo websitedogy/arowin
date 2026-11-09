@@ -1,8 +1,5 @@
-export default function formatDashboardDate(value) {
-  if (!value) return 'Not recorded'
+import formatDateTime from '../../utils/formatDateTime'
 
-  const date = new Date(String(value).replace(' ', 'T'))
-  return Number.isNaN(date.getTime())
-    ? 'Not recorded'
-    : new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: '2-digit' }).format(date)
+export default function formatDashboardDate(value) {
+  return formatDateTime(value, undefined, { year: 'numeric', month: 'short', day: '2-digit' }, { fallback: 'Not recorded' })
 }

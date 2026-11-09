@@ -76,8 +76,7 @@ function TrendChart({ range, employees }) {
           const y = padding.top + (tick / 4) * chartHeight
           return (
             <g key={value}>
-              <line className="trend-grid-line" x1={padding.left} x2={width - padding.right} y1={y} y2={y} />
-              <text className="trend-axis-label" x={padding.left - 8} y={y + 4} textAnchor="end">{value}</text>
+            <text className="trend-axis-label" x={padding.left - 8} y={y + 4} textAnchor="end">{value}</text>
             </g>
           )
         })}
@@ -128,7 +127,7 @@ export default function SubEditorDashboard({
     const telecallers = employeeRecords.filter((item) => item.role === 'Telecaller').length
     return {
       summary: [
-        { label: 'Budget', value: 'Open', tone: 'budget', icon: 'coins', path: '/budget' },
+        { label: 'Budget', value: 'Open', tone: 'budget', icon: 'coins', path: '/budget', highlightLabel: true },
         { label: 'All Employees', value: employeeRecords.length, tone: 'employees', icon: 'users', filter: 'all' },
         { label: 'Team Leaders', value: countRole('Team Leader'), tone: 'leaders', icon: 'crown', filter: 'team-leaders' },
         { label: 'Telecallers', value: countRole('Telecaller'), tone: 'telecallers', icon: 'headset', filter: 'telecallers' },
@@ -246,11 +245,11 @@ export default function SubEditorDashboard({
                   className={`stat-card tone-${item.tone}`}
                   key={item.label}
                   onClick={() => onNavigate(item.path || `/employees/${item.filter}`)}
-                  aria-label={item.path ? `Open ${item.label}` : `View ${item.value} ${item.label.toLowerCase()}`}
+                  aria-label={item.highlightLabel ? item.label : item.path ? `Open ${item.label}` : `View ${item.value} ${item.label.toLowerCase()}`}
                 >
                   <div className="stat-icon"><Icon name={item.icon} size={27} /></div>
-                  <strong>{item.value}</strong>
-                  <span>{item.label}</span>
+                  <strong>{item.highlightLabel ? item.label : item.value}</strong>
+                  {!item.highlightLabel && <span>{item.label}</span>}
                   <Icon name={item.icon} size={54} className="stat-watermark" />
                 </button>
               ))}

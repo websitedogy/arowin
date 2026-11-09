@@ -2,35 +2,60 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiRequest } from '../../api'
 import { formatMonth, formatUsdt } from '../../utils/formatters'
 import Icon from './components/Icon'
+import RoleProfileMenu from './components/RoleProfileMenu'
 import formatDashboardDate from './formatDashboardDate'
 import AttendancePanel from '../attendance/AttendancePanel'
 import SalesTrendPanel from '../sales/SalesTrendPanel'
 import UnlockSalesPage from '../sales/UnlockSalesPage'
 import MyIncentivesPage from '../sales/MyIncentivesPage'
+import TeamIncentivesPage from '../sales/TeamIncentivesPage'
+import TeamGrantIncentivesPage from '../sales/TeamGrantIncentivesPage'
+import TeamRewardsPage from '../sales/TeamRewardsPage'
 import LeadsEntryPage from '../sales/LeadsEntryPage'
 import LeaveManagementPage from '../leave/LeaveManagementPage'
 import DailyActivitiesPage from '../activities/DailyActivitiesPage'
 import SupportTicketsPage from '../support/SupportTicketsPage'
 import EmployeeKycPage from '../employees/EmployeeKycPage'
 
-const teamLeaderPages = [
-  { label: 'Dashboard', path: '/team-leader', icon: 'home', title: 'Team Leader Dashboard', description: 'Your team workspace overview.' },
-  { label: 'Profile', path: '/team-leader/profile', icon: 'user', title: 'Profile', description: 'Your account details.' },
-  { label: 'Employee KYC', path: '/team-leader/kyc', icon: 'file', title: 'Employee KYC', description: 'Submit your profile, bank, and identity details securely.' },
-  { label: 'Attendance', path: '/team-leader/attendance', icon: 'calendar', title: 'Attendance', description: 'View your salary, attendance, and calendar history.' },
-  { label: 'Leave', path: '/team-leader/leave', icon: 'calendar', title: 'Leave', description: 'Apply for leave and review your request status.' },
-  { label: 'Support', path: '/team-leader/support', icon: 'headset', title: 'Support Center', description: 'Raise a support ticket and follow updates from the AROWIN support team.' },
-  { label: 'Daily Activities', path: '/team-leader/daily-activities', icon: 'file', title: 'Daily Activities', description: 'Submit platform activity screenshots and check their verification status.' },
-  { label: 'My team', path: '/team-leader/my-team', icon: 'users', title: 'My Team', description: 'Employees assigned to your team will appear here.', status: 'No team members are assigned yet.' },
-  { label: 'Team sales', path: '/team-leader/team-sales', icon: 'chart', title: 'Team Sales', description: 'Sales recorded for your team will appear here.', status: 'Team sales are not available yet.' },
-  { label: 'My Unlock Sales', path: '/team-leader/sales', icon: 'trend', title: 'My Unlock Sales', description: 'Submit your own package sales for Sub Editor review and track their status.' },
-  { label: 'My Incentives', path: '/team-leader/incentives', icon: 'gift', title: 'My Incentives', description: 'View incentives earned from your approved package sales.' },
-  { label: 'Team Achievers', path: '/team-leader/team-achievers', icon: 'trophy', title: 'Team Achievers', description: 'Approved sales achievements by your assigned Telecallers.' },
-  { label: 'Team Incentives', path: '/team-leader/team-incentives', icon: 'gift', title: 'Team Incentives', description: 'Team incentive records will appear here.', status: 'Team incentives are not available yet.' },
-  { label: 'Team Grant Incentives', path: '/team-leader/team-grant-incentives', icon: 'coins', title: 'Team Grant Incentives', description: 'Team incentive grants and their status will appear here.', status: 'Incentive grants are not configured yet.' },
-  { label: 'Team Rewards', path: '/team-leader/team-rewards', icon: 'trophy', title: 'Team Rewards', description: 'Rewards earned by your team will appear here.', status: 'Team rewards are not available yet.' },
-  { label: 'Grant Team Rewards', path: '/team-leader/grant-team-rewards', icon: 'medal', title: 'Grant Team Rewards', description: 'Reward grants will be managed here when reward permissions and rules are configured.', status: 'Reward granting is not configured yet.' },
+const teamLeaderNavigationGroups = [
+  {
+    items: [
+      { label: 'Dashboard', path: '/team-leader', icon: 'home', title: 'Team Leader Dashboard', description: 'Your team workspace overview.' },
+    ],
+  },
+  {
+    label: 'My Work',
+    items: [
+      { label: 'Profile', path: '/team-leader/profile', icon: 'user', title: 'Profile', description: 'Your account details.' },
+      { label: 'Employee KYC', path: '/team-leader/kyc', icon: 'file', title: 'Employee KYC', description: 'Submit your profile, bank, and identity details securely.' },
+      { label: 'Attendance', path: '/team-leader/attendance', icon: 'calendar', title: 'Attendance', description: 'View your salary, attendance, and calendar history.' },
+      { label: 'Leave', path: '/team-leader/leave', icon: 'calendar', title: 'Leave', description: 'Apply for leave and review your request status.' },
+      { label: 'Daily Activities', path: '/team-leader/daily-activities', icon: 'file', title: 'Daily Activities', description: 'Submit platform activity screenshots and check their verification status.' },
+      { label: 'Support', path: '/team-leader/support', icon: 'headset', title: 'Support Center' },
+    ],
+  },
+  {
+    label: 'Team Management',
+    items: [
+      { label: 'My team', path: '/team-leader/my-team', icon: 'users', title: 'My Team', description: 'Employees assigned to your team will appear here.', status: 'No team members are assigned yet.' },
+      { label: 'Team sales', path: '/team-leader/team-sales', icon: 'chart', title: 'Team Sales', description: 'Sales recorded for your team will appear here.', status: 'Team sales are not available yet.' },
+      { label: 'Team Achievers', path: '/team-leader/team-achievers', icon: 'trophy', title: 'Team Achievers', description: 'Approved sales achievements by your assigned Telecallers.' },
+    ],
+  },
+  {
+    label: 'Sales & Rewards',
+    items: [
+      { label: 'My Unlock Sales', path: '/team-leader/sales', icon: 'trend', title: 'My Unlock Sales', description: 'Submit your own package sales for Sub Editor review and track their status.' },
+      { label: 'My Incentives', path: '/team-leader/incentives', icon: 'gift', title: 'My Incentives', description: 'View incentives earned from your approved package sales.' },
+      { label: 'Team Incentives', path: '/team-leader/team-incentives', icon: 'gift', title: 'Team Incentives', description: 'View package-sale incentives earned by your assigned Telecallers.' },
+      { label: 'Team Grant Incentives', path: '/team-leader/team-grant-incentives', icon: 'coins', title: 'Team Grant Incentives', description: 'See each Telecaller’s equal monthly target and your incentive share when everyone reaches their target.' },
+      { label: 'Team Rewards', path: '/team-leader/team-rewards', icon: 'trophy', title: 'Team Rewards', description: 'Track each assigned Telecaller’s contribution to the shared monthly sales target.' },
+      { label: 'Grant Team Rewards', path: '/team-leader/grant-team-rewards', icon: 'medal', title: 'Grant Team Rewards', description: 'View monthly target rewards automatically recorded for you when your team meets its target.' },
+    ],
+  },
 ]
+
+const teamLeaderPages = teamLeaderNavigationGroups.flatMap((group) => group.items)
 
 const telecallerSections = [
   { label: 'My Unlock Sales', value: '—', icon: 'trend', tone: 'blue', note: 'Sales tracking is not configured' },
@@ -38,19 +63,35 @@ const telecallerSections = [
   { label: 'Our Team Achievers', value: '—', icon: 'trophy', tone: 'purple', note: 'Approved teammate sale achievements' },
 ]
 
-const telecallerNavItems = [
-  { label: 'Dashboard', path: '/telecaller', icon: 'home', available: true },
-  { label: 'My Attendance', path: '/telecaller/attendance', icon: 'calendar', available: true },
-  { label: 'Leave', path: '/telecaller/leave', icon: 'calendar', available: true },
-  { label: 'My Unlock Sales', path: '/telecaller/sales', icon: 'trend', available: true },
-  { label: 'My Incentives', path: '/telecaller/incentives', icon: 'gift', available: true },
-  { label: 'Our Team Achievers', path: '/telecaller/team-achievers', icon: 'trophy', available: true },
-  { label: 'Leads Entry', path: '/telecaller/leads', icon: 'userPlus', available: true },
-  { label: 'Daily Activities', path: '/telecaller/daily-activities', icon: 'file', available: true },
-  { label: 'Support', path: '/telecaller/support', icon: 'headset', available: true },
-  { label: 'Profile', path: '/telecaller/profile', icon: 'user', available: true },
-  { label: 'Employee KYC', path: '/telecaller/kyc', icon: 'file', available: true },
+const telecallerNavigationGroups = [
+  {
+    items: [
+      { label: 'Dashboard', path: '/telecaller', icon: 'home', available: true },
+    ],
+  },
+  {
+    label: 'My Work',
+    items: [
+      { label: 'Profile', path: '/telecaller/profile', icon: 'user', available: true },
+      { label: 'Employee KYC', path: '/telecaller/kyc', icon: 'file', available: true },
+      { label: 'My Attendance', path: '/telecaller/attendance', icon: 'calendar', available: true },
+      { label: 'Leave', path: '/telecaller/leave', icon: 'calendar', available: true },
+      { label: 'Daily Activities', path: '/telecaller/daily-activities', icon: 'file', available: true },
+      { label: 'Support', path: '/telecaller/support', icon: 'headset', available: true },
+    ],
+  },
+  {
+    label: 'Sales & Performance',
+    items: [
+      { label: 'My Unlock Sales', path: '/telecaller/sales', icon: 'trend', available: true },
+      { label: 'My Incentives', path: '/telecaller/incentives', icon: 'gift', available: true },
+      { label: 'Our Team Achievers', path: '/telecaller/team-achievers', icon: 'trophy', available: true },
+      { label: 'Leads Entry', path: '/telecaller/leads', icon: 'userPlus', available: true },
+    ],
+  },
 ]
+
+const telecallerNavItems = telecallerNavigationGroups.flatMap((group) => group.items)
 
 const activityMonthOptions = Array.from({ length: 12 }, (_, offset) => {
   const date = new Date()
@@ -420,7 +461,17 @@ function TeamLeaderHome({
       tone: 'green',
     },
     { label: 'My Incentives', value: isLoadingIncentives ? '…' : formatUsdt(earnedIncentives), status: incentiveError ? 'Incentive data unavailable' : 'Approved personal package sales', icon: 'gift', tone: 'orange' },
-    { label: 'Team Rewards', value: '—', status: 'Not configured', icon: 'trophy', tone: 'purple' },
+    {
+      label: 'Team Rewards',
+      value: isLoadingSales ? '…' : monthlyTarget > 0 ? `${Math.round(actualSales / monthlyTarget * 100)}%` : '—',
+      status: monthlyTarget <= 0
+        ? 'Monthly target not set'
+        : actualSales >= monthlyTarget
+          ? 'Team target achieved'
+          : `${formatUsdt(Math.max(0, monthlyTarget - actualSales))} left to target`,
+      icon: 'trophy',
+      tone: 'purple',
+    },
   ]
 
   return (
@@ -493,6 +544,22 @@ function TeamLeaderContent({
 
   if (page.path === '/team-leader/incentives') {
     return <MyIncentivesPage user={user} />
+  }
+
+  if (page.path === '/team-leader/team-incentives') {
+    return <TeamIncentivesPage />
+  }
+
+  if (page.path === '/team-leader/team-grant-incentives') {
+    return <TeamGrantIncentivesPage />
+  }
+
+  if (page.path === '/team-leader/team-rewards') {
+    return <TeamRewardsPage />
+  }
+
+  if (page.path === '/team-leader/grant-team-rewards') {
+    return <TeamRewardsPage grantsOnly />
   }
 
   if (page.path === '/team-leader/team-achievers') {
@@ -725,12 +792,10 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
   const [showTeamNotifications, setShowTeamNotifications] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const salesRequestId = useRef(0)
-  const profileMenuRef = useRef(null)
   const page = teamLeaderPages.find((item) => item.path === currentPath) || teamLeaderPages[0]
   const currentPageTitle = isTeamLeader
     ? page.title
     : telecallerNavItems.find((item) => item.path === currentPath)?.label || dashboard.title
-  const navItems = isTeamLeader ? teamLeaderPages : []
 
   useEffect(() => {
     const compactViewport = window.matchMedia('(max-width: 1024px)')
@@ -754,22 +819,6 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
       window.removeEventListener('keydown', closeOnEscape)
     }
   }, [sidebarCollapsed])
-
-  useEffect(() => {
-    if (!showProfileMenu) return undefined
-    const closeOnOutsideClick = (event) => {
-      if (!profileMenuRef.current?.contains(event.target)) setShowProfileMenu(false)
-    }
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape') setShowProfileMenu(false)
-    }
-    document.addEventListener('pointerdown', closeOnOutsideClick)
-    window.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsideClick)
-      window.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [showProfileMenu])
 
   const loadSales = useCallback(async () => {
     const requestId = ++salesRequestId.current
@@ -886,25 +935,30 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
             </div>
           </div>
           <nav className="sidebar-nav" aria-label="Team Leader navigation">
-            {navItems.map((item) => {
-              const active = item.path === currentPath || (item.path === '/team-leader' && currentPath === '/')
-              return (
-                <button
-                  type="button"
-                  key={item.path}
-                  className={`nav-item${active ? ' active' : ''}`}
-                  aria-current={active ? 'page' : undefined}
-                  title={sidebarCollapsed ? item.label : undefined}
-                  onClick={() => {
-                    onNavigate(item.path)
-                    if (window.matchMedia('(max-width: 1024px)').matches) setSidebarCollapsed(true)
-                  }}
-                >
-                  <Icon name={item.icon} size={20} />
-                  <span className="nav-label">{item.label}</span>
-                </button>
-              )
-            })}
+            {teamLeaderNavigationGroups.map((group) => (
+              <div className="sidebar-nav-section" key={group.label || 'workspace'}>
+                {group.label && <span className="sidebar-nav-heading">{group.label}</span>}
+                {group.items.map((item) => {
+                  const active = item.path === currentPath || (item.path === '/team-leader' && currentPath === '/')
+                  return (
+                    <button
+                      type="button"
+                      key={item.path}
+                      className={`nav-item${active ? ' active' : ''}`}
+                      aria-current={active ? 'page' : undefined}
+                      title={sidebarCollapsed ? item.label : undefined}
+                      onClick={() => {
+                        onNavigate(item.path)
+                        if (window.matchMedia('(max-width: 1024px)').matches) setSidebarCollapsed(true)
+                      }}
+                    >
+                      <Icon name={item.icon} size={20} />
+                      <span className="nav-label">{item.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
           </nav>
           <div className="sidebar-wave" aria-hidden="true" />
         </aside>
@@ -919,27 +973,32 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
             <span><small>Module Monolith</small><strong>AROWIN</strong></span>
           </div>
           <nav className="telecaller-nav" aria-label="Telecaller navigation">
-            {telecallerNavItems.map((item) => {
-              const active = item.path === currentPath || (item.path === '/telecaller' && currentPath === '/')
-              return (
-                <button
-                  type="button"
-                  key={item.label}
-                  className={`telecaller-nav-item${active ? ' active' : ''}`}
-                  aria-current={active ? 'page' : undefined}
-                  disabled={!item.available}
-                  title={item.available ? undefined : 'This feature is not configured yet'}
-                  onClick={() => {
-                    onNavigate(item.path)
-                    if (window.matchMedia('(max-width: 1024px)').matches) setSidebarCollapsed(true)
-                  }}
-                >
-                  <Icon name={item.icon} size={19} />
-                  <span>{item.label}</span>
-                  {!item.available && <small>Soon</small>}
-                </button>
-              )
-            })}
+            {telecallerNavigationGroups.map((group) => (
+              <div className="sidebar-nav-section" key={group.label || 'workspace'}>
+                {group.label && <span className="sidebar-nav-heading">{group.label}</span>}
+                {group.items.map((item) => {
+                  const active = item.path === currentPath || (item.path === '/telecaller' && currentPath === '/')
+                  return (
+                    <button
+                      type="button"
+                      key={item.label}
+                      className={`telecaller-nav-item${active ? ' active' : ''}`}
+                      aria-current={active ? 'page' : undefined}
+                      disabled={!item.available}
+                      title={item.available ? undefined : 'This feature is not configured yet'}
+                      onClick={() => {
+                        onNavigate(item.path)
+                        if (window.matchMedia('(max-width: 1024px)').matches) setSidebarCollapsed(true)
+                      }}
+                    >
+                      <Icon name={item.icon} size={19} />
+                      <span>{item.label}</span>
+                      {!item.available && <small>Soon</small>}
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
           </nav>
           <div className="telecaller-sidebar-footer">
             <span className="telecaller-sidebar-user">{user.name?.[0]?.toUpperCase() || 'T'}</span>
@@ -1038,38 +1097,18 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
                 )}
               </div>
             )}
-            <div className="role-profile-menu" ref={profileMenuRef}>
-                <button
-                  type="button"
-                  className="role-profile-trigger"
-                  aria-label={`Profile menu for ${user.name}`}
-                  aria-haspopup="true"
-                  aria-expanded={showProfileMenu}
-                  onClick={() => setShowProfileMenu((open) => !open)}
-                >
-                  <ProfilePhoto profileImage={user.profileImage} name={user.name} className="profile-avatar" />
-                  <span className="role-profile-copy"><strong>{user.name}</strong><small>{dashboard.roleLabel}</small></span>
-                  <Icon name="down" size={15} />
-                </button>
-                {showProfileMenu && (
-                  <div className="role-profile-dropdown">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowProfileMenu(false)
-                        onNavigate(isTeamLeader ? '/team-leader/profile' : '/telecaller/profile')
-                      }}
-                    >
-                      <Icon name="user" size={17} />
-                      <span>My profile</span>
-                    </button>
-                    <button type="button" className="role-profile-signout" onClick={onLogout}>
-                      <Icon name="logout" size={17} />
-                      <span>Sign out</span>
-                    </button>
-                  </div>
-                )}
-            </div>
+            <RoleProfileMenu
+              name={user.name}
+              role={dashboard.roleLabel}
+              avatar={<ProfilePhoto profileImage={user.profileImage} name={user.name} className="profile-avatar" />}
+              actionLabel="My profile"
+              actionIcon="user"
+              actionPath={isTeamLeader ? '/team-leader/profile' : '/telecaller/profile'}
+              isOpen={showProfileMenu}
+              onOpenChange={setShowProfileMenu}
+              onNavigate={onNavigate}
+              onLogout={onLogout}
+            />
           </div>
         </header>
 

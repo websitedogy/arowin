@@ -6,6 +6,7 @@ namespace Arowin\Modules\Targets;
 
 use Arowin\Shared\AppTime;
 use Arowin\Shared\ValueFormatter;
+use Arowin\Modules\Sales\SalesController;
 use PDO;
 
 final class SalesTargetController
@@ -113,6 +114,14 @@ final class SalesTargetController
             ]);
             $historyId = (int) $this->database->lastInsertId();
 
+            (new SalesController($this->database))->syncTeamTargetReward(
+                $teamLeaderId,
+                substr($targetMonth, 0, 7)
+            );
+            (new SalesController($this->database))->syncTeamGrantIncentive(
+                $teamLeaderId,
+                substr($targetMonth, 0, 7)
+            );
             $this->database->commit();
 
             return [

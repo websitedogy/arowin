@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS attendance_records (
     check_in_distance_m DECIMAL(8, 2) NOT NULL,
     check_in_selfie VARCHAR(500) NOT NULL,
     late_deduction DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    on_time_bonus DECIMAL(10, 2) NOT NULL DEFAULT 0,
     check_out_at DATETIME,
     check_out_latitude DECIMAL(10, 7),
     check_out_longitude DECIMAL(10, 7),
@@ -107,6 +108,17 @@ CREATE TABLE IF NOT EXISTS attendance_records (
     UNIQUE KEY uq_attendance_user_date (user_id, attendance_date),
     CONSTRAINT fk_attendance_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS attendance_settings (
+    id TINYINT UNSIGNED PRIMARY KEY,
+    on_time_bonus_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    configured_by BIGINT UNSIGNED,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_attendance_setting_configurer FOREIGN KEY (configured_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+INSERT IGNORE INTO attendance_settings (id, on_time_bonus_amount)
+VALUES (1, 0.00);
 
 CREATE TABLE IF NOT EXISTS attendance_holidays (
     holiday_date DATE PRIMARY KEY,
@@ -163,6 +175,7 @@ CREATE TABLE IF NOT EXISTS daily_activities (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,
     platform VARCHAR(40) NOT NULL,
+    bonus_amount DECIMAL(10, 2) NULL,
     submitted_at DATETIME NOT NULL,
     status ENUM('pending', 'verified', 'rejected') NOT NULL DEFAULT 'pending',
     verified_by BIGINT UNSIGNED,
@@ -175,6 +188,38 @@ CREATE TABLE IF NOT EXISTS daily_activities (
     CONSTRAINT fk_daily_activity_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_daily_activity_reviewer FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL
 );
+
+CREATE TABLE IF NOT EXISTS daily_activity_bonus_rates (
+    platform VARCHAR(40) PRIMARY KEY,
+    amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    configured_by BIGINT UNSIGNED,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_daily_activity_bonus_configurer FOREIGN KEY (configured_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+INSERT IGNORE INTO daily_activity_bonus_rates (platform, amount) VALUES
+    ('Instagram', 2.00),
+    ('Facebook', 2.00),
+    ('WhatsApp Status', 2.00),
+    ('LinkedIn', 0.00),
+    ('YouTube', 0.00),
+    ('X (Twitter)', 0.00),
+    ('Telegram', 0.00),
+    ('Snapchat', 0.00),
+    ('Pinterest', 0.00),
+    ('Threads', 0.00),
+    ('Reddit', 0.00),
+    ('Other', 0.00);
+
+CREATE TABLE IF NOT EXISTS daily_activity_bonus_limits (
+    id TINYINT UNSIGNED PRIMARY KEY,
+    daily_cap_amount DECIMAL(10, 2) NOT NULL DEFAULT 6.00,
+    configured_by BIGINT UNSIGNED,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_daily_activity_limit_configurer FOREIGN KEY (configured_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+INSERT IGNORE INTO daily_activity_bonus_limits (id, daily_cap_amount) VALUES (1, 6.00);
 
 CREATE TABLE IF NOT EXISTS daily_activity_screenshots (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -273,6 +318,55 @@ WHERE NOT EXISTS (
     SELECT 1
     FROM team_leader_sales_target_history AS history
     WHERE history.target_id = target.id
+);
+
+CREATE TABLE IF NOT EXISTS team_leader_target_reward_settings (
+    id TINYINT UNSIGNED PRIMARY KEY,
+    reward_amount DECIMAL(14, 2) NOT NULL DEFAULT 0.00,
+    configured_by BIGINT UNSIGNED,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_team_target_reward_configurer FOREIGN KEY (configured_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+INSERT IGNORE INTO team_leader_target_reward_settings (id, reward_amount) VALUES (1, 0.00);
+
+CREATE TABLE IF NOT EXISTS team_leader_target_rewards (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    team_leader_id BIGINT UNSIGNED NOT NULL,
+    target_month DATE NOT NULL,
+    target_amount DECIMAL(14, 2) NOT NULL,
+    achieved_sales_amount DECIMAL(14, 2) NOT NULL,
+    reward_amount DECIMAL(14, 2) NOT NULL,
+    granted_at DATETIME NOT NULL,
+    UNIQUE KEY uq_team_leader_target_reward_month (team_leader_id, target_month),
+    INDEX idx_team_target_reward_month (target_month),
+    CONSTRAINT fk_team_target_reward_leader FOREIGN KEY (team_leader_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS team_grant_incentive_settings (
+    id TINYINT UNSIGNED PRIMARY KEY,
+    leader_share_percent DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
+    configured_by BIGINT UNSIGNED,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_team_grant_incentive_configurer FOREIGN KEY (configured_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+INSERT IGNORE INTO team_grant_incentive_settings (id, leader_share_percent) VALUES (1, 0.00);
+
+CREATE TABLE IF NOT EXISTS team_grant_incentives (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    team_leader_id BIGINT UNSIGNED NOT NULL,
+    target_month DATE NOT NULL,
+    team_target_amount DECIMAL(14, 2) NOT NULL,
+    member_target_amount DECIMAL(14, 2) NOT NULL,
+    team_member_count INT UNSIGNED NOT NULL,
+    team_incentive_amount DECIMAL(14, 2) NOT NULL,
+    leader_share_percent DECIMAL(5, 2) NOT NULL,
+    leader_incentive_amount DECIMAL(14, 2) NOT NULL,
+    granted_at DATETIME NOT NULL,
+    UNIQUE KEY uq_team_grant_incentive_month (team_leader_id, target_month),
+    INDEX idx_team_grant_incentive_month (target_month),
+    CONSTRAINT fk_team_grant_incentive_leader FOREIGN KEY (team_leader_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS telecaller_daily_sales (

@@ -36,6 +36,102 @@ final class DailyActivityController
     {
     }
 
+    public function bonusSettings(): array
+    {
+        $rates = array_fill_keys(self::PLATFORMS, 0.0);
+        $statement = $this->database->query(
+            'SELECT platform, amount FROM daily_activity_bonus_rates ORDER BY platform ASC'
+        );
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $platform = (string) $row['platform'];
+            if (array_key_exists($platform, $rates)) {
+                $rates[$platform] = (float) $row['amount'];
+            }
+        }
+
+        $dailyCap = $this->database->query(
+            'SELECT daily_cap_amount FROM daily_activity_bonus_limits WHERE id = 1'
+        )->fetchColumn();
+        if ($dailyCap === false) {
+            throw new RuntimeException('Daily activity bonus settings are missing. Run the database schema setup.');
+        }
+
+        return [
+            'platforms' => self::PLATFORMS,
+            'rates' => $rates,
+            'dailyCapAmount' => (float) $dailyCap,
+        ];
+    }
+
+    public function saveBonusSettings(array $payload, int $configuredBy): array
+    {
+        $rates = $payload['rates'] ?? null;
+        if (!is_array($rates) || count($rates) !== count(self::PLATFORMS)) {
+            throw new InvalidArgumentException('Enter an amount for every daily activity platform.');
+        }
+
+        $validatedRates = [];
+        foreach (self::PLATFORMS as $platform) {
+            $rawAmount = $rates[$platform] ?? null;
+            if ((!is_string($rawAmount) && !is_int($rawAmount) && !is_float($rawAmount))
+                || !is_numeric($rawAmount) || !is_finite((float) $rawAmount)) {
+                throw new InvalidArgumentException('Enter a valid non-negative amount for every platform.');
+            }
+            $amount = round((float) $rawAmount, 2);
+            if ($amount < 0 || $amount > 99999999.99) {
+                throw new InvalidArgumentException('Platform amounts must be between 0 and 99999999.99.');
+            }
+            $validatedRates[$platform] = $amount;
+        }
+
+        $rawCap = $payload['dailyCapAmount'] ?? null;
+        if ((!is_string($rawCap) && !is_int($rawCap) && !is_float($rawCap))
+            || !is_numeric($rawCap) || !is_finite((float) $rawCap)) {
+            throw new InvalidArgumentException('Enter a valid daily activity bonus maximum.');
+        }
+        $dailyCap = round((float) $rawCap, 2);
+        if ($dailyCap < 0 || $dailyCap > 99999999.99) {
+            throw new InvalidArgumentException('The daily activity bonus maximum must be between 0 and 99999999.99.');
+        }
+
+        $this->database->beginTransaction();
+        try {
+            $statement = $this->database->prepare(
+                'INSERT INTO daily_activity_bonus_rates (platform, amount, configured_by)
+                 VALUES (:platform, :amount, :configured_by)
+                 ON DUPLICATE KEY UPDATE
+                    amount = VALUES(amount),
+                    configured_by = VALUES(configured_by),
+                    updated_at = CURRENT_TIMESTAMP'
+            );
+            foreach ($validatedRates as $platform => $amount) {
+                $statement->execute([
+                    'platform' => $platform,
+                    'amount' => $amount,
+                    'configured_by' => $configuredBy,
+                ]);
+            }
+
+            $limit = $this->database->prepare(
+                'INSERT INTO daily_activity_bonus_limits (id, daily_cap_amount, configured_by)
+                 VALUES (1, :amount, :configured_by)
+                 ON DUPLICATE KEY UPDATE
+                    daily_cap_amount = VALUES(daily_cap_amount),
+                    configured_by = VALUES(configured_by),
+                    updated_at = CURRENT_TIMESTAMP'
+            );
+            $limit->execute(['amount' => $dailyCap, 'configured_by' => $configuredBy]);
+            $this->database->commit();
+        } catch (\Throwable $error) {
+            if ($this->database->inTransaction()) {
+                $this->database->rollBack();
+            }
+            throw $error;
+        }
+
+        return $this->bonusSettings();
+    }
+
     public function listActivities(?int $userId): array
     {
         $sql = 'SELECT a.id, a.user_id, u.employee_id, u.name AS employee_name, u.role,
@@ -269,24 +365,22 @@ final class DailyActivityController
             throw new InvalidArgumentException('Enter a rejection reason (up to 500 characters).');
         }
         if ($decision === 'approve') {
-            $reason = '';
+            $this->approveWithBonus($activityId, $reviewerId);
+            return;
         }
 
         $now = AppTime::now()->format('Y-m-d H:i:s');
-        $status = $decision === 'approve' ? 'verified' : 'rejected';
         $statement = $this->database->prepare(
             "UPDATE daily_activities
-             SET status = :status, verified_by = :reviewed_by,
-                 verified_at = :verified_at, reviewed_at = :reviewed_at,
+             SET status = 'rejected', verified_by = :reviewed_by,
+                 reviewed_at = :reviewed_at,
                  rejection_reason = :rejection_reason
              WHERE id = :id AND status = 'pending'"
         );
         $statement->execute([
-            'status' => $status,
             'reviewed_by' => $reviewerId,
-            'verified_at' => $decision === 'approve' ? $now : null,
             'reviewed_at' => $now,
-            'rejection_reason' => $decision === 'reject' ? $reason : null,
+            'rejection_reason' => $reason,
             'id' => $activityId,
         ]);
         if ($statement->rowCount() === 1) {
@@ -300,6 +394,105 @@ final class DailyActivityController
             throw new DomainException('Daily activity submission not found.');
         }
         throw new DomainException('This daily activity has already been reviewed.');
+    }
+
+    private function approveWithBonus(int $activityId, int $reviewerId): void
+    {
+        $now = AppTime::now()->format('Y-m-d H:i:s');
+        $this->database->beginTransaction();
+        try {
+            $activityQuery = $this->database->prepare(
+                'SELECT user_id, platform, submitted_at, status
+                 FROM daily_activities WHERE id = :id FOR UPDATE'
+            );
+            $activityQuery->execute(['id' => $activityId]);
+            $activity = $activityQuery->fetch(PDO::FETCH_ASSOC);
+            if (!is_array($activity)) {
+                throw new DomainException('Daily activity submission not found.');
+            }
+            if ($activity['status'] !== 'pending') {
+                throw new DomainException('This daily activity has already been reviewed.');
+            }
+
+            $userLock = $this->database->prepare('SELECT id FROM users WHERE id = :id FOR UPDATE');
+            $userLock->execute(['id' => $activity['user_id']]);
+            if ($userLock->fetchColumn() === false) {
+                throw new DomainException('The employee for this daily activity could not be found.');
+            }
+
+            $rateQuery = $this->database->prepare(
+                'SELECT amount FROM daily_activity_bonus_rates WHERE platform = :platform'
+            );
+            $rateQuery->execute(['platform' => $activity['platform']]);
+            $rate = $rateQuery->fetchColumn();
+            if ($rate === false) {
+                throw new RuntimeException('A daily activity platform rate is missing. Run the database schema setup.');
+            }
+
+            $dailyCap = $this->database->query(
+                'SELECT daily_cap_amount FROM daily_activity_bonus_limits WHERE id = 1'
+            )->fetchColumn();
+            if ($dailyCap === false) {
+                throw new RuntimeException('Daily activity bonus settings are missing. Run the database schema setup.');
+            }
+
+            $submittedDate = substr((string) $activity['submitted_at'], 0, 10);
+            $earnedSoFar = $this->verifiedBonusTotal((int) $activity['user_id'], $submittedDate);
+            $bonusAmount = round(min((float) $rate, max(0.0, (float) $dailyCap - $earnedSoFar)), 2);
+
+            $update = $this->database->prepare(
+                "UPDATE daily_activities
+                 SET status = 'verified', verified_by = :reviewer_id,
+                     verified_at = :verified_at, reviewed_at = :reviewed_at,
+                     rejection_reason = NULL, bonus_amount = :bonus_amount
+                 WHERE id = :id AND status = 'pending'"
+            );
+            $update->execute([
+                'reviewer_id' => $reviewerId,
+                'verified_at' => $now,
+                'reviewed_at' => $now,
+                'bonus_amount' => $bonusAmount,
+                'id' => $activityId,
+            ]);
+            if ($update->rowCount() !== 1) {
+                throw new DomainException('This daily activity has already been reviewed.');
+            }
+
+            $this->database->commit();
+        } catch (\Throwable $error) {
+            if ($this->database->inTransaction()) {
+                $this->database->rollBack();
+            }
+            throw $error;
+        }
+    }
+
+    private function verifiedBonusTotal(int $userId, string $activityDate): float
+    {
+        $statement = $this->database->prepare(
+            'SELECT a.platform, a.bonus_amount, COUNT(s.id) AS screenshot_count
+             FROM daily_activities a
+             LEFT JOIN daily_activity_screenshots s ON s.activity_id = a.id
+             WHERE a.user_id = :user_id
+               AND a.status = \'verified\'
+               AND DATE(a.submitted_at) = :activity_date
+             GROUP BY a.id
+             ORDER BY a.submitted_at ASC, a.id ASC'
+        );
+        $statement->execute(['user_id' => $userId, 'activity_date' => $activityDate]);
+        $total = 0.0;
+        $legacySocialTotal = 0.0;
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            if ($row['bonus_amount'] !== null) {
+                $total += (float) $row['bonus_amount'];
+            } elseif (in_array($row['platform'], ['Instagram', 'Facebook', 'WhatsApp Status'], true)) {
+                $legacyReward = min(6.0 - $legacySocialTotal, (int) $row['screenshot_count'] * 2.0);
+                $legacySocialTotal += $legacyReward;
+                $total += $legacyReward;
+            }
+        }
+
+        return round($total, 2);
     }
 
     public function screenshot(int $screenshotId, int $activityId, ?int $userId): array

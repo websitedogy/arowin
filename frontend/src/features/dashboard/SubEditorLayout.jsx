@@ -1,14 +1,52 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiRequest } from '../../api'
 import Icon from './components/Icon'
+import RoleProfileMenu from './components/RoleProfileMenu'
 import { subEditorFeatures } from './subEditorFeatures'
 
 const navigation = [
   { label: 'Dashboard', icon: 'home', path: '/' },
-  { label: 'All Employees', icon: 'users', path: '/employees/all' },
-  { label: 'Leave Requests', icon: 'calendar', path: '/leave-requests' },
-  { label: 'Support Tickets', icon: 'headset', path: '/support-tickets' },
-  { label: 'Daily Activities', icon: 'file', path: '/daily-activities' },
+]
+
+const navigationGroups = [
+  {
+    label: 'People',
+    items: [
+      { label: 'Employee KYC', icon: 'file', path: '/employee-kyc' },
+      { label: 'All Employees', icon: 'users', path: '/employees/all' },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { label: 'Attendance Tracking', icon: 'clock', path: '/attendance' },
+      { label: 'Leave Requests', icon: 'calendar', path: '/leave-requests' },
+      { label: 'Daily Activities', icon: 'file', path: '/daily-activities' },
+      { label: 'Support Tickets', icon: 'headset', path: '/support-tickets' },
+    ],
+  },
+  {
+    label: 'Sales & Incentives',
+    items: [
+      { label: 'Total Sales', icon: 'chart', path: '/sales/total' },
+      { label: "This Week's Sales", icon: 'chart', path: '/sales/weekly' },
+      { label: "Last Month's Sales", icon: 'chart', path: '/sales/monthly' },
+      { label: 'Target Setup', icon: 'settings', path: '/targets' },
+      { label: 'Incentive Earned', icon: 'plus', path: '/incentives/earned' },
+      { label: 'Incentive Paid', icon: 'clock', path: '/incentives/paid' },
+      { label: 'Achieved Rewards', icon: 'crown', path: '/rewards/achieved' },
+      { label: 'Granted Rewards', icon: 'users', path: '/rewards/granted' },
+      { label: 'All Leads', icon: 'file', path: '/leads' },
+      { label: 'Notification Trigger', icon: 'bell', path: '/notifications' },
+    ],
+  },
+  {
+    label: 'Finance & Settings',
+    items: [
+      { label: 'Budget', icon: 'coins', path: '/budget' },
+      { label: 'Settings', icon: 'settings', path: '/settings' },
+    ],
+  },
 ]
 
 function isNavigationActive(path, currentPath) {
@@ -37,7 +75,6 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
   const [supportLoadError, setSupportLoadError] = useState('')
   const [dataLoadError, setDataLoadError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-  const profileMenuRef = useRef(null)
 
   useEffect(() => {
     const compactViewport = window.matchMedia('(max-width: 1024px)')
@@ -61,22 +98,6 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
       window.removeEventListener('keydown', closeOnEscape)
     }
   }, [sidebarCollapsed])
-
-  useEffect(() => {
-    if (!showProfileMenu) return undefined
-    const closeOnOutsideClick = (event) => {
-      if (!profileMenuRef.current?.contains(event.target)) setShowProfileMenu(false)
-    }
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape') setShowProfileMenu(false)
-    }
-    document.addEventListener('pointerdown', closeOnOutsideClick)
-    window.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsideClick)
-      window.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [showProfileMenu])
 
   const loadSupportTickets = useCallback(async () => {
     try {
@@ -191,28 +212,36 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
               </button>
             )
           })}
-          <div className="sidebar-nav-section">
-            <span className="sidebar-nav-heading">Sub Editor Features</span>
-            {subEditorFeatures.map((item) => {
-              const active = currentPath === item.path || (item.path === '/targets' && currentPath.startsWith('/targets/'))
-              return (
-                <button
-                  type="button"
-                  key={item.path}
-                  className={`nav-item${active ? ' active' : ''}`}
-                  aria-current={active ? 'page' : undefined}
-                  title={sidebarCollapsed ? item.label : undefined}
-                  onClick={() => {
-                    onNavigate(item.path)
-                    if (window.matchMedia('(max-width: 1024px)').matches) setSidebarCollapsed(true)
-                  }}
-                >
-                  <Icon name={item.icon} size={20} />
-                  <span className="nav-label">{item.label}</span>
-                </button>
-              )
-            })}
-          </div>
+          {navigationGroups.map((group) => (
+            <div className="sidebar-nav-section" key={group.label}>
+              <span className="sidebar-nav-heading">{group.label}</span>
+              {group.items.map((item) => {
+                const active = currentPath === item.path
+                  || (item.path === '/targets' && currentPath.startsWith('/targets/'))
+                return (
+                  <button
+                    type="button"
+                    key={item.path}
+                    className={`nav-item${active ? ' active' : ''}`}
+                    aria-current={active ? 'page' : undefined}
+                    title={sidebarCollapsed ? item.label : undefined}
+                    onClick={() => {
+                      onNavigate(item.path)
+                      if (window.matchMedia('(max-width: 1024px)').matches) setSidebarCollapsed(true)
+                    }}
+                  >
+                    <Icon name={item.icon} size={20} />
+                    <span className="nav-label">{item.label}</span>
+                    {item.path === '/support-tickets' && ticketsNeedingAttention.length > 0 && (
+                      <span className="support-nav-badge" aria-label={`${ticketsNeedingAttention.length} tickets need attention`}>
+                        {ticketsNeedingAttention.length > 99 ? '99+' : ticketsNeedingAttention.length}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
         </nav>
         <div className="sidebar-wave" aria-hidden="true" />
       </aside>
@@ -306,41 +335,19 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
                 </div>
               )}
             </div>
-            <div className="profile-menu" ref={profileMenuRef}>
-              <button
-                type="button"
-                className="role-profile-trigger"
-                onClick={() => {
-                  setShowProfileMenu((value) => !value)
-                  setShowNotifications(false)
-                }}
-                aria-expanded={showProfileMenu}
-                aria-haspopup="true"
-                aria-label={`Profile menu for ${currentUserName}`}
-              >
-                <span className="profile-avatar">{currentUserName[0]?.toUpperCase() || 'A'}</span>
-                <span className="role-profile-copy"><strong>{currentUserName}</strong><small>Sub Editor</small></span>
-                <Icon name="down" size={15} />
-              </button>
-              {showProfileMenu && (
-                <div className="role-profile-dropdown">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowProfileMenu(false)
-                      onNavigate('/settings')
-                    }}
-                  >
-                    <Icon name="settings" size={17} />
-                    <span>Settings</span>
-                  </button>
-                  <button type="button" className="role-profile-signout" onClick={onLogout}>
-                    <Icon name="logout" size={17} />
-                    <span>Sign out</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            <RoleProfileMenu
+              name={currentUserName}
+              role="Sub Editor"
+              avatar={<span className="profile-avatar">{currentUserName[0]?.toUpperCase() || 'A'}</span>}
+              actionLabel="Settings"
+              actionIcon="settings"
+              actionPath="/settings"
+              isOpen={showProfileMenu}
+              onOpenChange={setShowProfileMenu}
+              onOpen={() => setShowNotifications(false)}
+              onNavigate={onNavigate}
+              onLogout={onLogout}
+            />
           </div>
         </header>
 

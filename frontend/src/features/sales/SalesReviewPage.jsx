@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiRequest } from '../../api'
+import formatDateTime from '../../utils/formatDateTime'
 import { formatUsdt } from '../../utils/formatters'
 
 const filters = [
@@ -10,15 +11,14 @@ const filters = [
 ]
 
 function displayDate(value) {
-  if (!value) return '—'
-  return new Intl.DateTimeFormat(undefined, {
+  return formatDateTime(value, undefined, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
     timeZone: 'Asia/Kolkata',
-  }).format(new Date(value.replace(' ', 'T') + '+05:30'))
+  }, { assumedOffset: '+05:30' })
 }
 
 export default function SalesReviewPage() {

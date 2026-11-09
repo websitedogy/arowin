@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiRequest } from '../../api'
 import Icon from '../dashboard/components/Icon'
+import formatDateTime from '../../utils/formatDateTime'
 import { formatUsdt } from '../../utils/formatters'
 
 const periodByPath = {
@@ -10,14 +11,12 @@ const periodByPath = {
 }
 
 function displayDate(date) {
-  if (!date) return '—'
-  const parsedDate = new Date(`${date}T00:00:00+05:30`)
-  return new Intl.DateTimeFormat(undefined, {
+  return formatDateTime(date, undefined, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
     timeZone: 'Asia/Kolkata',
-  }).format(parsedDate)
+  }, { assumedOffset: '+05:30' })
 }
 
 export default function SalesSummaryPage({ feature }) {

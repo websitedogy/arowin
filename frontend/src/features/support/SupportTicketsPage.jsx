@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiRequest } from '../../api'
+import formatDateTime from '../../utils/formatDateTime'
 import Icon from '../dashboard/components/Icon'
 
 const categories = [
@@ -23,17 +24,17 @@ const statuses = [
   { value: 'resolved', label: 'Resolved' },
   { value: 'closed', label: 'Closed' },
 ]
-const dateFormatter = new Intl.DateTimeFormat('en-IN', {
+const dateTimeOptions = {
   timeZone: 'Asia/Kolkata',
   day: 'numeric',
   month: 'short',
   year: 'numeric',
   hour: 'numeric',
   minute: '2-digit',
-})
+}
 
 function formatDate(value) {
-  return value ? dateFormatter.format(new Date(`${value.replace(' ', 'T')}+05:30`)) : '—'
+  return formatDateTime(value, 'en-IN', dateTimeOptions, { assumedOffset: '+05:30' })
 }
 
 function labelFor(options, value) {

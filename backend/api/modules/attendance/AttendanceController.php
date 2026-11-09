@@ -22,8 +22,10 @@ final class AttendanceController
     private const LATE_DEDUCTION = 100.00;
     private const MAX_SELFIE_BYTES = 4_000_000;
 
-    public function __construct(private readonly PDO $database)
-    {
+    public function __construct(
+        private readonly PDO $database,
+        private readonly ?DateTimeImmutable $nowOverride = null,
+    ) {
     }
 
     public function officeLocation(): ?array
@@ -102,7 +104,7 @@ final class AttendanceController
         $joiningDate = $employee['joining_date'];
 
         $todayQuery = $this->database->prepare(
-            'SELECT check_in_at, check_out_at, late_deduction, check_in_distance_m, check_out_distance_m
+            'SELECT check_in_at, check_out_at, late_deduction, on_time_bonus, check_in_distance_m, check_out_distance_m
              FROM attendance_records WHERE user_id = :user_id AND attendance_date = :attendance_date'
         );
         $todayQuery->execute(['user_id' => $userId, 'attendance_date' => $today]);
@@ -119,6 +121,8 @@ final class AttendanceController
             'dailySalary' => $monthDetails['dailySalary'],
             'earned' => $monthDetails['earned'],
             'activityBonus' => $monthDetails['activityBonus'],
+            'onTimeBonus' => $monthDetails['onTimeBonus'],
+            'onTimeBonusAmount' => $this->onTimeBonusSettingValue(),
             'leaveDeductions' => $monthDetails['leaveDeductions'],
             'lateDeductions' => $monthDetails['lateDeductions'],
             'remainingPayable' => $monthDetails['remainingPayable'],
@@ -128,6 +132,7 @@ final class AttendanceController
                 'checkedInAt' => $todayRecord['check_in_at'],
                 'checkedOutAt' => $todayRecord['check_out_at'],
                 'lateDeduction' => (float) $todayRecord['late_deduction'],
+                'onTimeBonus' => (float) ($todayRecord['on_time_bonus'] ?? 0),
                 'checkInDistanceMeters' => $todayRecord['check_in_distance_m'] === null ? null : (float) $todayRecord['check_in_distance_m'],
                 'checkOutDistanceMeters' => $todayRecord['check_out_distance_m'] === null ? null : (float) $todayRecord['check_out_distance_m'],
             ] : null,
@@ -145,6 +150,45 @@ final class AttendanceController
             'lateDeductionAmount' => self::LATE_DEDUCTION,
             'serverTime' => $now->format(DATE_ATOM),
         ];
+    }
+
+    public function settings(): array
+    {
+        $row = $this->database->query(
+            'SELECT on_time_bonus_amount FROM attendance_settings WHERE id = 1'
+        )->fetch(PDO::FETCH_ASSOC);
+
+        return [
+            'onTimeBonusAmount' => $row === false ? 0.0 : (float) $row['on_time_bonus_amount'],
+        ];
+    }
+
+    public function saveOnTimeBonusAmount(array $payload, int $configuredBy): array
+    {
+        $rawAmount = $payload['onTimeBonusAmount'] ?? $payload['amount'] ?? null;
+        if (!is_numeric($rawAmount) || !is_finite((float) $rawAmount)) {
+            throw new InvalidArgumentException('Enter a valid on-time attendance bonus amount.');
+        }
+
+        $amount = round((float) $rawAmount, 2);
+        if ($amount < 0 || $amount > 99999999.99) {
+            throw new InvalidArgumentException('The on-time attendance bonus must be between 0 and 99999999.99.');
+        }
+
+        $statement = $this->database->prepare(
+            'INSERT INTO attendance_settings (id, on_time_bonus_amount, configured_by)
+             VALUES (1, :amount, :configured_by)
+             ON DUPLICATE KEY UPDATE
+                on_time_bonus_amount = VALUES(on_time_bonus_amount),
+                configured_by = VALUES(configured_by),
+                updated_at = CURRENT_TIMESTAMP'
+        );
+        $statement->execute([
+            'amount' => $amount,
+            'configured_by' => $configuredBy,
+        ]);
+
+        return ['onTimeBonusAmount' => $amount];
     }
 
     public function history(int $userId, string $month): array
@@ -173,6 +217,7 @@ final class AttendanceController
         }
 
         $date = $now->format('Y-m-d');
+        $onTimeBonus = $this->isOnTimeCheckIn($now) ? $this->onTimeBonusSettingValue() : 0.0;
         $this->assertWorkingDay($date);
         $this->assertNotOnApprovedLeave($userId, $date);
         $this->assertEmployeeHasSalary($userId, $date);
@@ -184,10 +229,10 @@ final class AttendanceController
             $statement = $this->database->prepare(
                 'INSERT INTO attendance_records
                     (user_id, attendance_date, check_in_at, check_in_latitude, check_in_longitude,
-                     check_in_distance_m, check_in_selfie, late_deduction)
+                     check_in_distance_m, check_in_selfie, late_deduction, on_time_bonus)
                  VALUES
                     (:user_id, :attendance_date, :check_in_at, :latitude, :longitude,
-                     :distance, :selfie, :late_deduction)'
+                     :distance, :selfie, :late_deduction, :on_time_bonus)'
             );
             $statement->execute([
                 'user_id' => $userId,
@@ -198,6 +243,7 @@ final class AttendanceController
                 'distance' => $location['distance'],
                 'selfie' => $selfiePath,
                 'late_deduction' => $late ? self::LATE_DEDUCTION : 0,
+                'on_time_bonus' => $onTimeBonus,
             ]);
         } catch (PDOException $error) {
             $this->deleteSelfie($selfiePath);
@@ -290,7 +336,7 @@ final class AttendanceController
 
         $monthEnd = $monthStart->modify('last day of this month');
         $recordsQuery = $this->database->prepare(
-            'SELECT attendance_date, check_in_at, check_out_at, late_deduction
+            'SELECT attendance_date, check_in_at, check_out_at, late_deduction, on_time_bonus
              FROM attendance_records
              WHERE user_id = :user_id
                AND attendance_date >= :month_start
@@ -322,24 +368,38 @@ final class AttendanceController
 
         $nextMonthStart = $monthEnd->modify('+1 day');
         $activityBonusQuery = $this->database->prepare(
-            "SELECT DATE(a.submitted_at) AS activity_date, COUNT(s.id) AS verified_posts
+            "SELECT DATE(a.submitted_at) AS activity_date, a.platform, a.bonus_amount,
+                    COUNT(s.id) AS screenshot_count
              FROM daily_activities a
-             JOIN daily_activity_screenshots s ON s.activity_id = a.id
+             LEFT JOIN daily_activity_screenshots s ON s.activity_id = a.id
              WHERE a.user_id = :user_id
                AND a.status = 'verified'
-               AND a.platform IN ('Instagram', 'Facebook', 'WhatsApp Status')
                AND a.submitted_at >= :month_start
                AND a.submitted_at < :next_month_start
-             GROUP BY DATE(a.submitted_at)"
+             GROUP BY a.id
+             ORDER BY a.submitted_at ASC, a.id ASC"
         );
         $activityBonusQuery->execute([
             'user_id' => $userId,
             'month_start' => $monthStart->format('Y-m-d'),
             'next_month_start' => $nextMonthStart->format('Y-m-d'),
         ]);
-        $verifiedSocialPosts = [];
+        $dailyActivityBonuses = [];
+        $legacySocialBonuses = [];
         foreach ($activityBonusQuery->fetchAll(PDO::FETCH_ASSOC) as $activityBonusRow) {
-            $verifiedSocialPosts[(string) $activityBonusRow['activity_date']] = (int) $activityBonusRow['verified_posts'];
+            $activityDate = (string) $activityBonusRow['activity_date'];
+            if ($activityBonusRow['bonus_amount'] !== null) {
+                $dailyActivityBonuses[$activityDate] = ($dailyActivityBonuses[$activityDate] ?? 0.0)
+                    + (float) $activityBonusRow['bonus_amount'];
+            } elseif (in_array($activityBonusRow['platform'], ['Instagram', 'Facebook', 'WhatsApp Status'], true)) {
+                $legacySocialBonuses[$activityDate] = min(
+                    6.0,
+                    ($legacySocialBonuses[$activityDate] ?? 0.0) + (int) $activityBonusRow['screenshot_count'] * 2.0
+                );
+            }
+        }
+        foreach ($legacySocialBonuses as $activityDate => $legacyBonus) {
+            $dailyActivityBonuses[$activityDate] = ($dailyActivityBonuses[$activityDate] ?? 0.0) + $legacyBonus;
         }
 
         $leaveQuery = $this->database->prepare(
@@ -369,6 +429,7 @@ final class AttendanceController
         $dailySalary = $salary === null ? null : $salary / (int) $monthEnd->format('d');
         $earnedTotal = 0.0;
         $activityBonusTotal = 0.0;
+        $onTimeBonusTotal = 0.0;
         $leaveDeductions = 0.0;
         $lateDeductions = 0.0;
         $attendedDays = 0;
@@ -410,13 +471,18 @@ final class AttendanceController
                 $earnedTotal += $dailySalary;
             }
             $dailyActivityBonus = !$beforeJoining && !$isFuture
-                ? min(6.0, ($verifiedSocialPosts[$dateString] ?? 0) * 2.0)
+                ? (float) ($dailyActivityBonuses[$dateString] ?? 0)
                 : 0.0;
             $activityBonusTotal += $dailyActivityBonus;
+            $dailyOnTimeBonus = !$beforeJoining && !$isFuture && !$isHoliday && is_array($record)
+                ? (float) ($record['on_time_bonus'] ?? 0)
+                : 0.0;
+            if ($dailyOnTimeBonus > 0) {
+                $onTimeBonusTotal += $dailyOnTimeBonus;
+            }
             if (isset($approvedLeaveDays[$dateString]) && !$isHoliday && !$beforeJoining && !$isFuture && !$isComplete && $dailySalary !== null) {
                 $leaveDeductions += $dailySalary;
             }
-
             $lateDeduction = is_array($record) ? (float) $record['late_deduction'] : 0.0;
             if (!$beforeJoining && !$isFuture) {
                 $lateDeductions += $lateDeduction;
@@ -433,6 +499,7 @@ final class AttendanceController
                 'checkInAt' => is_array($record) ? $record['check_in_at'] : null,
                 'checkOutAt' => is_array($record) ? $record['check_out_at'] : null,
                 'lateDeduction' => $lateDeduction,
+                'onTimeBonus' => $dailyOnTimeBonus,
                 'earned' => $dailyEarned,
                 'activityBonus' => $dailyActivityBonus,
             ];
@@ -440,6 +507,7 @@ final class AttendanceController
 
         $earned = $salary === null ? null : min($salary, round($earnedTotal, 2));
         $activityBonusTotal = round($activityBonusTotal, 2);
+        $onTimeBonusTotal = round($onTimeBonusTotal, 2);
         $lateDeductions = round($lateDeductions, 2);
 
         return [
@@ -448,14 +516,28 @@ final class AttendanceController
             'dailySalary' => $dailySalary,
             'earned' => $earned,
             'activityBonus' => $activityBonusTotal,
+            'onTimeBonus' => $onTimeBonusTotal,
             'leaveDeductions' => $salary === null ? null : round($leaveDeductions, 2),
             'lateDeductions' => $lateDeductions,
             'remainingPayable' => $earned === null
                 ? null
-                : max(0, round($earned + $activityBonusTotal - $lateDeductions, 2)),
+                : max(0, round($earned + $activityBonusTotal + $onTimeBonusTotal - $lateDeductions, 2)),
             'attendedDays' => $attendedDays,
             'days' => $days,
         ];
+    }
+    private function onTimeBonusSettingValue(): float
+    {
+        $row = $this->database->query(
+            'SELECT on_time_bonus_amount FROM attendance_settings WHERE id = 1'
+        )->fetch(PDO::FETCH_ASSOC);
+
+        return $row === false ? 0.0 : (float) $row['on_time_bonus_amount'];
+    }
+
+    private function isOnTimeCheckIn(DateTimeImmutable $moment): bool
+    {
+        return $moment->format('H:i:s') <= '09:30:00';
     }
 
     private function assertWorkingDay(string $date): void
@@ -616,6 +698,6 @@ final class AttendanceController
 
     private function now(): DateTimeImmutable
     {
-        return AppTime::now();
+        return $this->nowOverride ?? AppTime::now();
     }
 }

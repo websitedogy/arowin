@@ -225,6 +225,38 @@ try {
         jsonResponse(['success' => true, 'salary' => $salary]);
     }
 
+    if ($path === '/api/attendance/settings' && $method === 'GET') {
+        requireSubEditor();
+        jsonResponse([
+            'success' => true,
+            'settings' => (new AttendanceController(Database::connect()))->settings(),
+        ]);
+    }
+
+    if ($path === '/api/attendance/settings' && $method === 'POST') {
+        requireSubEditor();
+        $settings = (new AttendanceController(Database::connect()))->saveOnTimeBonusAmount(
+            parseJsonBody(),
+            (int) $_SESSION['user']['id']
+        );
+        jsonResponse(['success' => true, 'settings' => $settings]);
+    }
+
+    if ($path === '/api/daily-activities/settings' && $method === 'GET') {
+        requireSubEditor();
+        $settings = (new DailyActivityController(Database::connect()))->bonusSettings();
+        jsonResponse(['success' => true, 'settings' => $settings]);
+    }
+
+    if ($path === '/api/daily-activities/settings' && $method === 'POST') {
+        requireSubEditor();
+        $settings = (new DailyActivityController(Database::connect()))->saveBonusSettings(
+            parseJsonBody(),
+            (int) $_SESSION['user']['id']
+        );
+        jsonResponse(['success' => true, 'settings' => $settings]);
+    }
+
     if ($path === '/api/attendance/office-location' && $method === 'GET') {
         requireSubEditor();
         jsonResponse([
@@ -506,6 +538,49 @@ try {
         ]);
     }
 
+    if ($path === '/api/sales-targets/reward-settings' && $method === 'GET') {
+        requireSubEditor();
+        $sales = new SalesController(Database::connect());
+        jsonResponse(['success' => true, 'settings' => $sales->teamTargetRewardSettings()]);
+    }
+
+    if ($path === '/api/sales-targets/reward-settings' && $method === 'POST') {
+        requireSubEditor();
+        $payload = parseJsonBody();
+        $rewardAmount = $payload['rewardAmount'] ?? null;
+        if (!is_string($rewardAmount) && !is_int($rewardAmount) && !is_float($rewardAmount)) {
+            jsonResponse(['success' => false, 'message' => 'Enter a valid Team Leader target reward in USDT.'], 422);
+        }
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'settings' => $sales->saveTeamTargetRewardAmount((string) $rewardAmount, (int) $_SESSION['user']['id']),
+        ]);
+    }
+
+    if ($path === '/api/sales-targets/team-grant-incentive-settings' && $method === 'GET') {
+        requireSubEditor();
+        $sales = new SalesController(Database::connect());
+        jsonResponse(['success' => true, 'settings' => $sales->teamGrantIncentiveSettings()]);
+    }
+
+    if ($path === '/api/sales-targets/team-grant-incentive-settings' && $method === 'POST') {
+        requireSubEditor();
+        $payload = parseJsonBody();
+        $leaderSharePercent = $payload['leaderSharePercent'] ?? null;
+        if (!is_string($leaderSharePercent) && !is_int($leaderSharePercent) && !is_float($leaderSharePercent)) {
+            jsonResponse(['success' => false, 'message' => 'Enter a valid Team Leader incentive share percentage.'], 422);
+        }
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'settings' => $sales->saveTeamGrantIncentivePercentage(
+                (string) $leaderSharePercent,
+                (int) $_SESSION['user']['id']
+            ),
+        ]);
+    }
+
     if ($path === '/api/sales/performance' && $method === 'GET') {
         requireAuthenticated();
         $sales = new SalesController(Database::connect());
@@ -638,6 +713,48 @@ try {
         ]);
     }
 
+    if ($path === '/api/sales/team-incentives' && $method === 'GET') {
+        requireAuthenticated();
+        if ($_SESSION['user']['role'] !== 'team_leader') {
+            jsonResponse(['success' => false, 'message' => 'Team incentives are only available to Team Leaders.'], 403);
+        }
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'result' => $sales->teamIncentives((int) $_SESSION['user']['id']),
+        ]);
+    }
+
+    if ($path === '/api/sales/team-rewards' && $method === 'GET') {
+        requireAuthenticated();
+        if ($_SESSION['user']['role'] !== 'team_leader') {
+            jsonResponse(['success' => false, 'message' => 'Team rewards are only available to Team Leaders.'], 403);
+        }
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'result' => $sales->teamTargetRewards(
+                (int) $_SESSION['user']['id'],
+                (string) ($_GET['month'] ?? AppTime::now()->format('Y-m'))
+            ),
+        ]);
+    }
+
+    if ($path === '/api/sales/team-grant-incentives' && $method === 'GET') {
+        requireAuthenticated();
+        if ($_SESSION['user']['role'] !== 'team_leader') {
+            jsonResponse(['success' => false, 'message' => 'Team grant incentives are only available to Team Leaders.'], 403);
+        }
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'result' => $sales->teamGrantIncentives(
+                (int) $_SESSION['user']['id'],
+                (string) ($_GET['month'] ?? AppTime::now()->format('Y-m'))
+            ),
+        ]);
+    }
+
     if ($path === '/api/sales/incentives/earned' && $method === 'GET') {
         requireSubEditor();
         $sales = new SalesController(Database::connect());
@@ -754,78 +871,76 @@ try {
     jsonResponse(['success' => false, 'message' => 'The request could not be completed. Check the backend logs.'], 500);
 }
 
+use Arowin\RouteAuthorization;
+
 function requireAuthenticated(): void
 {
-    if (!isset($_SESSION['user'])) {
-        jsonResponse(['success' => false, 'message' => 'Sign in to continue.'], 401);
+    $message = RouteAuthorization::ensureAuthenticated($_SESSION ?? []);
+    if ($message !== null) {
+        jsonResponse(['success' => false, 'message' => $message], 401);
     }
 }
 
 function requireSubEditor(): void
 {
-    requireAuthenticated();
-
-    if ($_SESSION['user']['role'] !== 'sub_editor') {
-        jsonResponse(['success' => false, 'message' => 'Only Sub Editors can manage employee accounts.'], 403);
+    $message = RouteAuthorization::ensureSubEditor($_SESSION ?? []);
+    if ($message !== null) {
+        jsonResponse(['success' => false, 'message' => $message], 403);
     }
 }
 
 function requireAttendanceEmployee(): void
 {
-    requireAuthenticated();
-
-    if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
-        jsonResponse(['success' => false, 'message' => 'Only Team Leaders and Telecallers can mark attendance.'], 403);
+    $message = RouteAuthorization::ensureAttendanceEmployee($_SESSION ?? []);
+    if ($message !== null) {
+        jsonResponse(['success' => false, 'message' => $message], 403);
     }
 }
 
 function requireLeaveApplicant(): int
 {
-    requireAuthenticated();
-
-    if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
-        jsonResponse(['success' => false, 'message' => 'Only Team Leaders and Telecallers can apply for leave.'], 403);
+    $message = RouteAuthorization::ensureLeaveApplicant($_SESSION ?? []);
+    if ($message !== null) {
+        jsonResponse(['success' => false, 'message' => $message], 403);
     }
 
-    return (int) $_SESSION['user']['id'];
+    return (int) ($_SESSION['user']['id'] ?? 0);
 }
 
 function requireKycEmployee(): int
 {
-    requireAuthenticated();
-
-    if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
-        jsonResponse(['success' => false, 'message' => 'Employee KYC is available to Team Leaders and Telecallers only.'], 403);
+    $message = RouteAuthorization::ensureKycEmployee($_SESSION ?? []);
+    if ($message !== null) {
+        jsonResponse(['success' => false, 'message' => $message], 403);
     }
 
-    return (int) $_SESSION['user']['id'];
+    return (int) ($_SESSION['user']['id'] ?? 0);
 }
 
 function requireDailyActivityEmployee(): int
 {
-    requireAuthenticated();
-
-    if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
-        jsonResponse(['success' => false, 'message' => 'Only Team Leaders and Telecallers can submit daily activities.'], 403);
+    $message = RouteAuthorization::ensureDailyActivityEmployee($_SESSION ?? []);
+    if ($message !== null) {
+        jsonResponse(['success' => false, 'message' => $message], 403);
     }
 
-    return (int) $_SESSION['user']['id'];
+    return (int) ($_SESSION['user']['id'] ?? 0);
 }
 
 function requireSalesEmployee(): void
 {
-    requireAuthenticated();
-
-    if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
-        jsonResponse(['success' => false, 'message' => 'Only Team Leaders and Telecallers can submit unlock sales.'], 403);
+    $message = RouteAuthorization::ensureSalesEmployee($_SESSION ?? []);
+    if ($message !== null) {
+        jsonResponse(['success' => false, 'message' => $message], 403);
     }
 }
 
 function requireSupportEmployee(): int
 {
-    if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
-        jsonResponse(['success' => false, 'message' => 'Only Team Leaders and Telecallers can raise support tickets.'], 403);
+    $message = RouteAuthorization::ensureSupportEmployee($_SESSION ?? []);
+    if ($message !== null) {
+        jsonResponse(['success' => false, 'message' => $message], 403);
     }
 
-    return (int) $_SESSION['user']['id'];
+    return (int) ($_SESSION['user']['id'] ?? 0);
 }

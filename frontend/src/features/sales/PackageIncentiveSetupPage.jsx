@@ -4,7 +4,7 @@ import { formatUsdt } from '../../utils/formatters'
 
 const packageAmounts = ['50.00', '150.00', '350.00', '750.00', '1550.00', '3150.00', '6350.00', '12750.00']
 
-export default function PackageIncentiveSetupPage() {
+export default function PackageIncentiveSettings() {
   const [packages, setPackages] = useState([])
   const [incentives, setIncentives] = useState({})
   const [error, setError] = useState('')
@@ -57,16 +57,17 @@ export default function PackageIncentiveSetupPage() {
   }
 
   return (
-    <section className="sub-editor-feature-page package-incentive-page">
-      <span className="mini-label">Sub Editor Workspace</span>
-      <h1>Package Incentive Setup</h1>
-      <p className="sub-editor-feature-description">
-        Set the USDT incentive earned for each package. Sales can be submitted after all eight package rates are saved.
-      </p>
-
+    <article className="dashboard-panel settings-amount-card">
+      <div className="settings-card-heading">
+        <span className="settings-card-icon is-sales" aria-hidden="true">05</span>
+        <div>
+          <span className="settings-card-eyebrow">PACKAGE SALES</span>
+          <h2>Sales incentive rates</h2>
+          <p>USDT incentives are credited after a package sale is approved.</p>
+        </div>
+      </div>
       {error && <p className="dashboard-data-error" role="alert">{error}</p>}
       {notice && <p className="sales-success-message" role="status">{notice}</p>}
-
       <form className="dashboard-panel package-incentive-form" onSubmit={save}>
         {isLoading ? (
           <p>Loading package settings…</p>
@@ -110,6 +111,6 @@ export default function PackageIncentiveSetupPage() {
           </>
         )}
       </form>
-    </section>
+    </article>
   )
 }

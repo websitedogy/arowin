@@ -7,6 +7,7 @@ namespace Arowin\Modules\Sales;
 use Arowin\Shared\AppTime;
 use Arowin\Shared\ValueFormatter;
 use DateTimeImmutable;
+use PDOException;
 use PDO;
 
 final class SalesController
@@ -333,6 +334,587 @@ final class SalesController
         ];
     }
 
+    public function teamIncentives(int $teamLeaderId): array
+    {
+        $leader = $this->database->prepare(
+            "SELECT id FROM users WHERE id = :id AND role = 'team_leader' LIMIT 1"
+        );
+        $leader->execute(['id' => $teamLeaderId]);
+        if ($leader->fetchColumn() === false) {
+            throw new \DomainException('Team incentives are only available to Team Leaders.');
+        }
+
+        $employees = $this->database->prepare(
+            "SELECT employee.id, employee.employee_id, employee.name,
+                    COUNT(sale.id) AS approved_sales,
+                    COALESCE(SUM(sale.incentive_amount), 0.00) AS total_incentive
+             FROM team_assignments AS assignment
+             INNER JOIN users AS employee
+               ON employee.id = assignment.telecaller_id AND employee.role = 'telecaller'
+             LEFT JOIN unlock_sales AS sale
+               ON sale.telecaller_id = employee.id AND sale.status = 'approved'
+             WHERE assignment.team_leader_id = :team_leader_id
+             GROUP BY employee.id, employee.employee_id, employee.name
+             ORDER BY total_incentive DESC, employee.name ASC"
+        );
+        $employees->execute(['team_leader_id' => $teamLeaderId]);
+
+        $totals = $this->database->prepare(
+            "SELECT COALESCE(SUM(sale.incentive_amount), 0.00) AS total_incentive,
+                    COUNT(sale.id) AS approved_sales
+             FROM team_assignments AS assignment
+             INNER JOIN users AS employee
+               ON employee.id = assignment.telecaller_id AND employee.role = 'telecaller'
+             LEFT JOIN unlock_sales AS sale
+               ON sale.telecaller_id = employee.id AND sale.status = 'approved'
+             WHERE assignment.team_leader_id = :team_leader_id"
+        );
+        $totals->execute(['team_leader_id' => $teamLeaderId]);
+        $totalsRow = $totals->fetch(PDO::FETCH_ASSOC);
+
+        $history = $this->database->prepare(
+            "SELECT sale.id, employee.employee_id, employee.name AS employee_name,
+                    sale.package_amount, sale.incentive_amount, sale.sold_on, sale.reviewed_at
+             FROM team_assignments AS assignment
+             INNER JOIN users AS employee
+               ON employee.id = assignment.telecaller_id AND employee.role = 'telecaller'
+             INNER JOIN unlock_sales AS sale
+               ON sale.telecaller_id = employee.id AND sale.status = 'approved'
+             WHERE assignment.team_leader_id = :team_leader_id
+             ORDER BY sale.reviewed_at DESC, sale.id DESC
+             LIMIT 500"
+        );
+        $history->execute(['team_leader_id' => $teamLeaderId]);
+
+        $teamRows = $employees->fetchAll(PDO::FETCH_ASSOC);
+        return [
+            'totalIncentive' => (string) $totalsRow['total_incentive'],
+            'approvedSales' => (int) $totalsRow['approved_sales'],
+            'teamMemberCount' => count($teamRows),
+            'employees' => array_map(static fn (array $row): array => [
+                'employeeId' => (string) $row['employee_id'],
+                'name' => (string) $row['name'],
+                'approvedSales' => (int) $row['approved_sales'],
+                'totalIncentive' => (string) $row['total_incentive'],
+            ], $teamRows),
+            'incentives' => array_map(static fn (array $row): array => [
+                'saleId' => (int) $row['id'],
+                'employeeId' => (string) $row['employee_id'],
+                'employeeName' => (string) $row['employee_name'],
+                'packageAmount' => (string) $row['package_amount'],
+                'incentiveAmount' => (string) $row['incentive_amount'],
+                'soldOn' => (string) $row['sold_on'],
+                'approvedAt' => (string) $row['reviewed_at'],
+            ], $history->fetchAll(PDO::FETCH_ASSOC)),
+        ];
+    }
+
+    public function teamTargetRewardSettings(): array
+    {
+        $amount = $this->database->query(
+            'SELECT reward_amount FROM team_leader_target_reward_settings WHERE id = 1'
+        )->fetchColumn();
+        if ($amount === false) {
+            throw new \RuntimeException('Team target reward settings are missing. Run the database schema setup.');
+        }
+
+        return ['rewardAmount' => (string) $amount];
+    }
+
+    public function saveTeamTargetRewardAmount(string $rawAmount, int $configuredBy): array
+    {
+        $amount = trim($rawAmount);
+        if (!ValueFormatter::isValidSalesAmount($amount)) {
+            throw new \InvalidArgumentException('Enter a valid non-negative Team Leader target reward in USDT.');
+        }
+
+        $this->database->beginTransaction();
+        try {
+            $upsert = $this->database->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite'
+                ? 'INSERT INTO team_leader_target_reward_settings (id, reward_amount, configured_by)
+                   VALUES (1, :reward_amount, :configured_by)
+                   ON CONFLICT(id) DO UPDATE SET
+                       reward_amount = excluded.reward_amount,
+                       configured_by = excluded.configured_by,
+                       updated_at = CURRENT_TIMESTAMP'
+                : 'INSERT INTO team_leader_target_reward_settings (id, reward_amount, configured_by)
+                   VALUES (1, :reward_amount, :configured_by)
+                   ON DUPLICATE KEY UPDATE
+                       reward_amount = VALUES(reward_amount),
+                       configured_by = VALUES(configured_by),
+                       updated_at = CURRENT_TIMESTAMP';
+            $save = $this->database->prepare($upsert);
+            $save->execute([
+                'reward_amount' => ValueFormatter::formatAmount($amount),
+                'configured_by' => $configuredBy,
+            ]);
+
+            $targets = $this->database->query(
+                'SELECT team_leader_id, target_month FROM team_leader_sales_targets'
+            )->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($targets as $target) {
+                $this->syncTeamTargetReward(
+                    (int) $target['team_leader_id'],
+                    substr((string) $target['target_month'], 0, 7)
+                );
+            }
+
+            $this->database->commit();
+        } catch (\Throwable $error) {
+            if ($this->database->inTransaction()) {
+                $this->database->rollBack();
+            }
+            throw $error;
+        }
+
+        return $this->teamTargetRewardSettings();
+    }
+
+    public function teamTargetRewards(int $teamLeaderId, string $month): array
+    {
+        $leader = $this->database->prepare(
+            "SELECT id FROM users WHERE id = :id AND role = 'team_leader' LIMIT 1"
+        );
+        $leader->execute(['id' => $teamLeaderId]);
+        if ($leader->fetchColumn() === false) {
+            throw new \DomainException('Team rewards are only available to Team Leaders.');
+        }
+
+        $monthStart = ValueFormatter::normalizeMonth($month, 'Choose a valid target month.');
+        $this->syncTeamTargetReward($teamLeaderId, substr($monthStart, 0, 7));
+        $monthEnd = (new DateTimeImmutable($monthStart))->modify('first day of next month')->format('Y-m-d');
+
+        $targetQuery = $this->database->prepare(
+            'SELECT target_amount FROM team_leader_sales_targets
+             WHERE team_leader_id = :team_leader_id AND target_month = :target_month LIMIT 1'
+        );
+        $targetQuery->execute(['team_leader_id' => $teamLeaderId, 'target_month' => $monthStart]);
+        $targetAmount = $targetQuery->fetchColumn();
+
+        $salesQuery = $this->database->prepare(
+            "SELECT COALESCE(SUM(sale.package_amount), 0.00)
+             FROM team_assignments AS assignment
+             INNER JOIN users AS employee
+               ON employee.id = assignment.telecaller_id AND employee.role = 'telecaller'
+             INNER JOIN unlock_sales AS sale
+               ON sale.telecaller_id = employee.id AND sale.status = 'approved'
+             WHERE assignment.team_leader_id = :team_leader_id
+               AND sale.sold_on >= :month_start AND sale.sold_on < :month_end"
+        );
+        $salesQuery->execute([
+            'team_leader_id' => $teamLeaderId,
+            'month_start' => $monthStart,
+            'month_end' => $monthEnd,
+        ]);
+        $teamSales = (float) $salesQuery->fetchColumn();
+
+        $membersQuery = $this->database->prepare(
+            "SELECT employee.employee_id, employee.name,
+                    COALESCE(SUM(sale.package_amount), 0.00) AS sales_amount,
+                    COUNT(sale.id) AS approved_sales
+             FROM team_assignments AS assignment
+             INNER JOIN users AS employee
+               ON employee.id = assignment.telecaller_id AND employee.role = 'telecaller'
+             LEFT JOIN unlock_sales AS sale
+               ON sale.telecaller_id = employee.id
+              AND sale.status = 'approved'
+              AND sale.sold_on >= :month_start
+              AND sale.sold_on < :month_end
+             WHERE assignment.team_leader_id = :team_leader_id
+             GROUP BY employee.id, employee.employee_id, employee.name
+             ORDER BY sales_amount DESC, employee.name ASC"
+        );
+        $membersQuery->execute([
+            'team_leader_id' => $teamLeaderId,
+            'month_start' => $monthStart,
+            'month_end' => $monthEnd,
+        ]);
+        $targetValue = $targetAmount === false ? null : (float) $targetAmount;
+        $members = array_map(static function (array $row) use ($targetValue): array {
+            $salesAmount = (float) $row['sales_amount'];
+
+            return [
+                'employeeId' => (string) $row['employee_id'],
+                'name' => (string) $row['name'],
+                'approvedSales' => (int) $row['approved_sales'],
+                'salesAmount' => ValueFormatter::formatAmount($salesAmount),
+                'targetContributionPercent' => $targetValue === null || $targetValue <= 0
+                    ? 0
+                    : round($salesAmount / $targetValue * 100, 2),
+            ];
+        }, $membersQuery->fetchAll(PDO::FETCH_ASSOC));
+
+        $grantQuery = $this->database->prepare(
+            'SELECT target_amount, achieved_sales_amount, reward_amount, granted_at
+             FROM team_leader_target_rewards
+             WHERE team_leader_id = :team_leader_id AND target_month = :target_month LIMIT 1'
+        );
+        $grantQuery->execute(['team_leader_id' => $teamLeaderId, 'target_month' => $monthStart]);
+        $grant = $grantQuery->fetch(PDO::FETCH_ASSOC);
+
+        $historyQuery = $this->database->prepare(
+            'SELECT target_month, target_amount, achieved_sales_amount, reward_amount, granted_at
+             FROM team_leader_target_rewards
+             WHERE team_leader_id = :team_leader_id
+             ORDER BY target_month DESC LIMIT 24'
+        );
+        $historyQuery->execute(['team_leader_id' => $teamLeaderId]);
+
+        return [
+            'month' => substr($monthStart, 0, 7),
+            'targetAmount' => $targetValue === null ? null : ValueFormatter::formatAmount($targetValue),
+            'teamSalesAmount' => ValueFormatter::formatAmount($teamSales),
+            'remainingAmount' => $targetValue === null
+                ? null
+                : ValueFormatter::formatAmount(max(0, $targetValue - $teamSales)),
+            'progressPercent' => $targetValue === null || $targetValue <= 0
+                ? 0
+                : round($teamSales / $targetValue * 100, 2),
+            'targetAchieved' => $targetValue !== null && $teamSales >= $targetValue,
+            'configuredRewardAmount' => $this->teamTargetRewardSettings()['rewardAmount'],
+            'grant' => is_array($grant) ? [
+                'targetAmount' => (string) $grant['target_amount'],
+                'achievedSalesAmount' => (string) $grant['achieved_sales_amount'],
+                'rewardAmount' => (string) $grant['reward_amount'],
+                'grantedAt' => (string) $grant['granted_at'],
+            ] : null,
+            'members' => $members,
+            'grantHistory' => array_map(static fn (array $row): array => [
+                'month' => substr((string) $row['target_month'], 0, 7),
+                'targetAmount' => (string) $row['target_amount'],
+                'achievedSalesAmount' => (string) $row['achieved_sales_amount'],
+                'rewardAmount' => (string) $row['reward_amount'],
+                'grantedAt' => (string) $row['granted_at'],
+            ], $historyQuery->fetchAll(PDO::FETCH_ASSOC)),
+        ];
+    }
+
+    public function syncTeamTargetReward(int $teamLeaderId, string $month): void
+    {
+        $monthStart = ValueFormatter::normalizeMonth($month, 'Choose a valid target month.');
+        $targetQuery = $this->database->prepare(
+            'SELECT target_amount FROM team_leader_sales_targets
+             WHERE team_leader_id = :team_leader_id AND target_month = :target_month LIMIT 1'
+        );
+        $targetQuery->execute(['team_leader_id' => $teamLeaderId, 'target_month' => $monthStart]);
+        $targetAmount = $targetQuery->fetchColumn();
+        if ($targetAmount === false) {
+            return;
+        }
+
+        $rewardAmount = (float) $this->teamTargetRewardSettings()['rewardAmount'];
+        if ($rewardAmount <= 0) {
+            return;
+        }
+
+        $monthEnd = (new DateTimeImmutable($monthStart))->modify('first day of next month')->format('Y-m-d');
+        $salesQuery = $this->database->prepare(
+            "SELECT COALESCE(SUM(sale.package_amount), 0.00)
+             FROM team_assignments AS assignment
+             INNER JOIN users AS employee
+               ON employee.id = assignment.telecaller_id AND employee.role = 'telecaller'
+             INNER JOIN unlock_sales AS sale
+               ON sale.telecaller_id = employee.id AND sale.status = 'approved'
+             WHERE assignment.team_leader_id = :team_leader_id
+               AND sale.sold_on >= :month_start AND sale.sold_on < :month_end"
+        );
+        $salesQuery->execute([
+            'team_leader_id' => $teamLeaderId,
+            'month_start' => $monthStart,
+            'month_end' => $monthEnd,
+        ]);
+        $salesAmount = (float) $salesQuery->fetchColumn();
+        if ($salesAmount < (float) $targetAmount) {
+            return;
+        }
+
+        try {
+            $grant = $this->database->prepare(
+                'INSERT INTO team_leader_target_rewards
+                    (team_leader_id, target_month, target_amount, achieved_sales_amount, reward_amount, granted_at)
+                 VALUES
+                    (:team_leader_id, :target_month, :target_amount, :sales_amount, :reward_amount, CURRENT_TIMESTAMP)'
+            );
+            $grant->execute([
+                'team_leader_id' => $teamLeaderId,
+                'target_month' => $monthStart,
+                'target_amount' => $targetAmount,
+                'sales_amount' => ValueFormatter::formatAmount($salesAmount),
+                'reward_amount' => ValueFormatter::formatAmount($rewardAmount),
+            ]);
+        } catch (PDOException $error) {
+            if ($error->getCode() !== '23000') {
+                throw $error;
+            }
+
+            $existingGrant = $this->database->prepare(
+                'SELECT id FROM team_leader_target_rewards
+                 WHERE team_leader_id = :team_leader_id AND target_month = :target_month LIMIT 1'
+            );
+            $existingGrant->execute([
+                'team_leader_id' => $teamLeaderId,
+                'target_month' => $monthStart,
+            ]);
+            if ($existingGrant->fetchColumn() === false) {
+                throw $error;
+            }
+        }
+    }
+
+    public function teamGrantIncentiveSettings(): array
+    {
+        $percentage = $this->database->query(
+            'SELECT leader_share_percent FROM team_grant_incentive_settings WHERE id = 1'
+        )->fetchColumn();
+        if ($percentage === false) {
+            throw new \RuntimeException('Team grant incentive settings are missing. Run the database schema setup.');
+        }
+
+        return ['leaderSharePercent' => (string) $percentage];
+    }
+
+    public function saveTeamGrantIncentivePercentage(string $rawPercentage, int $configuredBy): array
+    {
+        $percentage = trim($rawPercentage);
+        if (!ValueFormatter::isValidSalesAmount($percentage) || (float) $percentage > 100) {
+            throw new \InvalidArgumentException('Enter a Team Leader incentive share between 0 and 100 percent.');
+        }
+
+        $this->database->beginTransaction();
+        try {
+            $upsert = $this->database->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite'
+                ? 'INSERT INTO team_grant_incentive_settings (id, leader_share_percent, configured_by)
+                   VALUES (1, :leader_share_percent, :configured_by)
+                   ON CONFLICT(id) DO UPDATE SET
+                       leader_share_percent = excluded.leader_share_percent,
+                       configured_by = excluded.configured_by,
+                       updated_at = CURRENT_TIMESTAMP'
+                : 'INSERT INTO team_grant_incentive_settings (id, leader_share_percent, configured_by)
+                   VALUES (1, :leader_share_percent, :configured_by)
+                   ON DUPLICATE KEY UPDATE
+                       leader_share_percent = VALUES(leader_share_percent),
+                       configured_by = VALUES(configured_by),
+                       updated_at = CURRENT_TIMESTAMP';
+            $save = $this->database->prepare($upsert);
+            $save->execute([
+                'leader_share_percent' => ValueFormatter::formatAmount($percentage),
+                'configured_by' => $configuredBy,
+            ]);
+
+            $targets = $this->database->query(
+                'SELECT team_leader_id, target_month FROM team_leader_sales_targets'
+            )->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($targets as $target) {
+                $this->syncTeamGrantIncentive(
+                    (int) $target['team_leader_id'],
+                    substr((string) $target['target_month'], 0, 7)
+                );
+            }
+
+            $this->database->commit();
+        } catch (\Throwable $error) {
+            if ($this->database->inTransaction()) {
+                $this->database->rollBack();
+            }
+            throw $error;
+        }
+
+        return $this->teamGrantIncentiveSettings();
+    }
+
+    public function teamGrantIncentives(int $teamLeaderId, string $month): array
+    {
+        $leader = $this->database->prepare(
+            "SELECT id FROM users WHERE id = :id AND role = 'team_leader' LIMIT 1"
+        );
+        $leader->execute(['id' => $teamLeaderId]);
+        if ($leader->fetchColumn() === false) {
+            throw new \DomainException('Team grant incentives are only available to Team Leaders.');
+        }
+
+        $monthStart = ValueFormatter::normalizeMonth($month, 'Choose a valid target month.');
+        $this->syncTeamGrantIncentive($teamLeaderId, substr($monthStart, 0, 7));
+        $progress = $this->teamGrantIncentiveProgress($teamLeaderId, $monthStart);
+        $monthLabel = substr($monthStart, 0, 7);
+
+        $grantQuery = $this->database->prepare(
+            'SELECT team_target_amount, member_target_amount, team_member_count,
+                    team_incentive_amount, leader_share_percent, leader_incentive_amount, granted_at
+             FROM team_grant_incentives
+             WHERE team_leader_id = :team_leader_id AND target_month = :target_month LIMIT 1'
+        );
+        $grantQuery->execute(['team_leader_id' => $teamLeaderId, 'target_month' => $monthStart]);
+        $grant = $grantQuery->fetch(PDO::FETCH_ASSOC);
+
+        $historyQuery = $this->database->prepare(
+            'SELECT target_month, team_target_amount, member_target_amount, team_member_count,
+                    team_incentive_amount, leader_share_percent, leader_incentive_amount, granted_at
+             FROM team_grant_incentives
+             WHERE team_leader_id = :team_leader_id
+             ORDER BY target_month DESC LIMIT 24'
+        );
+        $historyQuery->execute(['team_leader_id' => $teamLeaderId]);
+
+        return [
+            'month' => $monthLabel,
+            'teamTargetAmount' => $progress['teamTargetAmount'],
+            'memberTargetAmount' => $progress['memberTargetAmount'],
+            'teamSalesAmount' => ValueFormatter::formatAmount($progress['teamSalesAmount']),
+            'teamIncentiveAmount' => ValueFormatter::formatAmount($progress['teamIncentiveAmount']),
+            'leaderSharePercent' => $progress['leaderSharePercent'],
+            'teamMemberCount' => count($progress['members']),
+            'achievedMemberCount' => $progress['achievedMemberCount'],
+            'allMembersReached' => $progress['allMembersReached'],
+            'grant' => is_array($grant) ? [
+                'teamTargetAmount' => (string) $grant['team_target_amount'],
+                'memberTargetAmount' => (string) $grant['member_target_amount'],
+                'teamMemberCount' => (int) $grant['team_member_count'],
+                'teamIncentiveAmount' => (string) $grant['team_incentive_amount'],
+                'leaderSharePercent' => (string) $grant['leader_share_percent'],
+                'leaderIncentiveAmount' => (string) $grant['leader_incentive_amount'],
+                'grantedAt' => (string) $grant['granted_at'],
+            ] : null,
+            'members' => $progress['members'],
+            'grantHistory' => array_map(static fn (array $row): array => [
+                'month' => substr((string) $row['target_month'], 0, 7),
+                'teamTargetAmount' => (string) $row['team_target_amount'],
+                'memberTargetAmount' => (string) $row['member_target_amount'],
+                'teamMemberCount' => (int) $row['team_member_count'],
+                'teamIncentiveAmount' => (string) $row['team_incentive_amount'],
+                'leaderSharePercent' => (string) $row['leader_share_percent'],
+                'leaderIncentiveAmount' => (string) $row['leader_incentive_amount'],
+                'grantedAt' => (string) $row['granted_at'],
+            ], $historyQuery->fetchAll(PDO::FETCH_ASSOC)),
+        ];
+    }
+
+    public function syncTeamGrantIncentive(int $teamLeaderId, string $month): void
+    {
+        $monthStart = ValueFormatter::normalizeMonth($month, 'Choose a valid target month.');
+        $progress = $this->teamGrantIncentiveProgress($teamLeaderId, $monthStart);
+        $percentage = (float) $progress['leaderSharePercent'];
+        if (!$progress['allMembersReached'] || $percentage <= 0) {
+            return;
+        }
+
+        $leaderIncentiveAmount = round($progress['teamIncentiveAmount'] * $percentage / 100, 2);
+        try {
+            $grant = $this->database->prepare(
+                'INSERT INTO team_grant_incentives
+                    (team_leader_id, target_month, team_target_amount, member_target_amount,
+                     team_member_count, team_incentive_amount, leader_share_percent,
+                     leader_incentive_amount, granted_at)
+                 VALUES
+                    (:team_leader_id, :target_month, :team_target_amount, :member_target_amount,
+                     :team_member_count, :team_incentive_amount, :leader_share_percent,
+                     :leader_incentive_amount, CURRENT_TIMESTAMP)'
+            );
+            $grant->execute([
+                'team_leader_id' => $teamLeaderId,
+                'target_month' => $monthStart,
+                'team_target_amount' => $progress['teamTargetAmount'],
+                'member_target_amount' => $progress['memberTargetAmount'],
+                'team_member_count' => count($progress['members']),
+                'team_incentive_amount' => ValueFormatter::formatAmount($progress['teamIncentiveAmount']),
+                'leader_share_percent' => ValueFormatter::formatAmount($percentage),
+                'leader_incentive_amount' => ValueFormatter::formatAmount($leaderIncentiveAmount),
+            ]);
+        } catch (PDOException $error) {
+            if ($error->getCode() !== '23000') {
+                throw $error;
+            }
+
+            $existingGrant = $this->database->prepare(
+                'SELECT id FROM team_grant_incentives
+                 WHERE team_leader_id = :team_leader_id AND target_month = :target_month LIMIT 1'
+            );
+            $existingGrant->execute([
+                'team_leader_id' => $teamLeaderId,
+                'target_month' => $monthStart,
+            ]);
+            if ($existingGrant->fetchColumn() === false) {
+                throw $error;
+            }
+        }
+    }
+
+    private function teamGrantIncentiveProgress(int $teamLeaderId, string $monthStart): array
+    {
+        $targetQuery = $this->database->prepare(
+            'SELECT target_amount FROM team_leader_sales_targets
+             WHERE team_leader_id = :team_leader_id AND target_month = :target_month LIMIT 1'
+        );
+        $targetQuery->execute(['team_leader_id' => $teamLeaderId, 'target_month' => $monthStart]);
+        $target = $targetQuery->fetchColumn();
+        $teamTarget = $target === false ? null : (float) $target;
+        $monthEnd = (new DateTimeImmutable($monthStart))->modify('first day of next month')->format('Y-m-d');
+
+        $membersQuery = $this->database->prepare(
+            "SELECT employee.employee_id, employee.name,
+                    COALESCE(SUM(sale.package_amount), 0.00) AS sales_amount,
+                    COALESCE(SUM(sale.incentive_amount), 0.00) AS incentive_amount,
+                    COUNT(sale.id) AS approved_sales
+             FROM team_assignments AS assignment
+             INNER JOIN users AS employee
+               ON employee.id = assignment.telecaller_id AND employee.role = 'telecaller'
+             LEFT JOIN unlock_sales AS sale
+               ON sale.telecaller_id = employee.id
+              AND sale.status = 'approved'
+              AND sale.sold_on >= :month_start
+              AND sale.sold_on < :month_end
+             WHERE assignment.team_leader_id = :team_leader_id
+             GROUP BY employee.id, employee.employee_id, employee.name
+             ORDER BY sales_amount DESC, employee.name ASC"
+        );
+        $membersQuery->execute([
+            'team_leader_id' => $teamLeaderId,
+            'month_start' => $monthStart,
+            'month_end' => $monthEnd,
+        ]);
+        $rows = $membersQuery->fetchAll(PDO::FETCH_ASSOC);
+        $memberTarget = $teamTarget !== null && count($rows) > 0
+            ? ceil(($teamTarget / count($rows)) * 100) / 100
+            : null;
+        $achievedMemberCount = 0;
+        $teamSales = 0.0;
+        $teamIncentives = 0.0;
+        $members = [];
+        foreach ($rows as $row) {
+            $salesAmount = (float) $row['sales_amount'];
+            $incentiveAmount = (float) $row['incentive_amount'];
+            $targetReached = $memberTarget !== null && $salesAmount >= $memberTarget;
+            if ($targetReached) {
+                $achievedMemberCount++;
+            }
+            $teamSales += $salesAmount;
+            $teamIncentives += $incentiveAmount;
+            $members[] = [
+                'employeeId' => (string) $row['employee_id'],
+                'name' => (string) $row['name'],
+                'approvedSales' => (int) $row['approved_sales'],
+                'salesAmount' => ValueFormatter::formatAmount($salesAmount),
+                'incentiveAmount' => ValueFormatter::formatAmount($incentiveAmount),
+                'targetAmount' => $memberTarget === null ? null : ValueFormatter::formatAmount($memberTarget),
+                'targetReached' => $targetReached,
+                'targetProgressPercent' => $memberTarget === null || $memberTarget <= 0
+                    ? 0
+                    : round($salesAmount / $memberTarget * 100, 2),
+            ];
+        }
+
+        return [
+            'teamTargetAmount' => $teamTarget === null ? null : ValueFormatter::formatAmount($teamTarget),
+            'memberTargetAmount' => $memberTarget === null ? null : ValueFormatter::formatAmount($memberTarget),
+            'teamSalesAmount' => $teamSales,
+            'teamIncentiveAmount' => $teamIncentives,
+            'leaderSharePercent' => $this->teamGrantIncentiveSettings()['leaderSharePercent'],
+            'members' => $members,
+            'achievedMemberCount' => $achievedMemberCount,
+            'allMembersReached' => $memberTarget !== null && count($members) > 0
+                && $achievedMemberCount === count($members),
+        ];
+    }
+
     public function employeeUnlockSales(int $employeeId): array
     {
         $statement = $this->database->prepare(
@@ -450,7 +1032,7 @@ final class SalesController
         $this->database->beginTransaction();
         try {
             $saleQuery = $this->database->prepare(
-                'SELECT status, package_amount
+                'SELECT status, package_amount, telecaller_id, sold_on
                  FROM unlock_sales WHERE id = :id FOR UPDATE'
             );
             $saleQuery->execute(['id' => $saleId]);
@@ -492,6 +1074,27 @@ final class SalesController
             ]);
             if ($update->rowCount() !== 1) {
                 throw new \DomainException('This unlock sale has already been reviewed.');
+            }
+            if ($decision === 'approved') {
+                $assignment = $this->database->prepare(
+                    "SELECT assignment.team_leader_id
+                     FROM team_assignments AS assignment
+                     INNER JOIN users AS employee
+                       ON employee.id = assignment.telecaller_id AND employee.role = 'telecaller'
+                     WHERE assignment.telecaller_id = :telecaller_id LIMIT 1"
+                );
+                $assignment->execute(['telecaller_id' => $sale['telecaller_id']]);
+                $teamLeaderId = $assignment->fetchColumn();
+                if ($teamLeaderId !== false) {
+                    $this->syncTeamTargetReward(
+                        (int) $teamLeaderId,
+                        substr((string) $sale['sold_on'], 0, 7)
+                    );
+                    $this->syncTeamGrantIncentive(
+                        (int) $teamLeaderId,
+                        substr((string) $sale['sold_on'], 0, 7)
+                    );
+                }
             }
             $this->database->commit();
         } catch (\Throwable $error) {

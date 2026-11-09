@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiRequest } from '../../api'
+import formatDateTime from '../../utils/formatDateTime'
 
 const platforms = [
   'Instagram',
@@ -20,14 +21,14 @@ const statusFilters = ['all', 'pending', 'verified', 'rejected']
 const statusLabels = { all: 'All', pending: 'Pending', verified: 'Accepted', rejected: 'Rejected' }
 const roleLabels = { team_leader: 'Team Leader', telecaller: 'Telecaller' }
 
-const timestampFormatter = new Intl.DateTimeFormat('en-IN', {
+const timestampOptions = {
   dateStyle: 'medium',
   timeStyle: 'short',
   timeZone: 'Asia/Kolkata',
-})
+}
 
 function formatTimestamp(value) {
-  return timestampFormatter.format(new Date(`${value.replace(' ', 'T')}+05:30`))
+  return formatDateTime(value, 'en-IN', timestampOptions, { assumedOffset: '+05:30' })
 }
 
 function PrivateScreenshot({ activityId, screenshot }) {

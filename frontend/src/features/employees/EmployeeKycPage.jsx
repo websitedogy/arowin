@@ -30,6 +30,12 @@ function formatJoiningDate(value) {
   }).format(new Date(`${value}T00:00:00+05:30`))
 }
 
+function formatRole(role) {
+  if (role === 'team_leader') return 'Team Leader'
+  if (role === 'sub_editor') return 'Sub Editor'
+  return 'Telecaller'
+}
+
 export default function EmployeeKycPage({ user }) {
   const [step, setStep] = useState(0)
   const [profile, setProfile] = useState({ fullName: user.name || '', mobile: user.mobile || '', email: user.email || '' })
@@ -252,7 +258,7 @@ export default function EmployeeKycPage({ user }) {
                 <div className="employee-kyc-office-intro"><Icon name="home" size={20} /><span><strong>Assigned office details</strong><small>Read-only information from your employee and office records.</small></span></div>
                 <div className="employee-kyc-office-grid">
                   <div><span>Employee ID</span><strong>{office?.employeeId || user.employeeId || 'Not available'}</strong></div>
-                  <div><span>Role</span><strong>{office?.role || (user.role === 'team_leader' ? 'Team Leader' : 'Telecaller')}</strong></div>
+                  <div><span>Role</span><strong>{office?.role || formatRole(user.role)}</strong></div>
                   <div><span>Joining date</span><strong>{formatJoiningDate(office?.joiningDate)}</strong></div>
                   <div className="is-full"><span>Office address</span><strong>{office?.officeAddress || 'Office address has not been configured yet.'}</strong></div>
                 </div>

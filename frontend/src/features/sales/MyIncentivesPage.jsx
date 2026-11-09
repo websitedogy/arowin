@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { apiRequest } from '../../api'
+import formatDateTime from '../../utils/formatDateTime'
 import { formatUsdt } from '../../utils/formatters'
 
 function displayDate(value) {
-  if (!value) return '—'
-  return new Intl.DateTimeFormat(undefined, {
+  return formatDateTime(value, undefined, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
     timeZone: 'Asia/Kolkata',
-  }).format(new Date(`${value}T00:00:00+05:30`))
+  }, { assumedOffset: '+05:30' })
 }
 
 export default function MyIncentivesPage({ user }) {

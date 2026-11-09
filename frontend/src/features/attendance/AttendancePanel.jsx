@@ -3,13 +3,16 @@ import { apiRequest } from '../../api'
 import Icon from '../dashboard/components/Icon'
 import AttendanceSelfieModal from './AttendanceSelfieModal'
 import AttendanceHistory from './AttendanceHistory'
+import formatDateTime from '../../utils/formatDateTime'
 import { formatCurrency } from '../../utils/formatters'
 
 const currency = formatCurrency
 
-const formatTime = (dateTime) => dateTime
-  ? new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }).format(new Date(`${dateTime.replace(' ', 'T')}+05:30`))
-  : ''
+const formatTime = (dateTime) => formatDateTime(dateTime, 'en-IN', {
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'Asia/Kolkata',
+}, { fallback: '', assumedOffset: '+05:30' })
 
 const MAX_LOCATION_ACCURACY_METERS = 200
 const LOCATION_MAX_AGE_MS = 15000
@@ -192,6 +195,7 @@ export default function AttendancePanel({ compact = false }) {
             <div><span>Monthly salary</span><strong>{attendance.monthlySalary === null ? 'Not set' : currency(attendance.monthlySalary)}</strong></div>
             <div><span>Earned this month</span><strong>{attendance.earned === null ? 'Not set' : currency(attendance.earned)}</strong></div>
             <div><span>Daily activity bonus</span><strong>{currency(attendance.activityBonus)}</strong></div>
+            <div><span>On-time bonus</span><strong>{currency(attendance.onTimeBonus ?? 0)}</strong></div>
             <div><span>Approved leave cut-off</span><strong>{attendance.leaveDeductions === null ? 'Not set' : currency(attendance.leaveDeductions)}</strong></div>
             <div><span>Cut-off · after late deductions</span><strong>{attendance.remainingPayable === null ? 'Not set' : currency(attendance.remainingPayable)}</strong></div>
           </div>
@@ -215,7 +219,7 @@ export default function AttendancePanel({ compact = false }) {
 
           <div className="attendance-policy-note">
             <Icon name="clock" size={17} />
-            <span>Check in by 9:45 AM to avoid a deduction. Check-ins from 9:46 AM to 10:29 AM are marked late; the ₹100 deduction is included in the cut-off. Approved leave and unattended workdays are unpaid. Sundays and Sub Editor holidays are paid and need no attendance. Attendance requires live location within {attendance.officeRadiusMeters} meters and a selfie.</span>
+            <span>Check in by 9:30 AM to earn the configured on-time bonus. Check in by 9:45 AM to avoid a deduction. Check-ins from 9:46 AM to 10:29 AM are marked late; the ₹100 deduction is included in the cut-off. Approved leave and unattended workdays are unpaid. Sundays and Sub Editor holidays are paid and need no attendance. Attendance requires live location within {attendance.officeRadiusMeters} meters and a selfie.</span>
           </div>
 
           {isPaidHolidayToday ? (

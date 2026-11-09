@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react'
 import { apiRequest } from '../../api'
 import Icon from '../dashboard/components/Icon'
+import formatDateTime from '../../utils/formatDateTime'
 import { formatUsdt } from '../../utils/formatters'
 
 function displayDate(value) {
-  if (!value) return '—'
-  return new Intl.DateTimeFormat(undefined, {
+  return formatDateTime(value, undefined, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
     timeZone: 'Asia/Kolkata',
-  }).format(new Date(value.replace(' ', 'T') + '+05:30'))
+  }, { assumedOffset: '+05:30' })
 }
 
 export default function UnlockSalesPage({ user }) {

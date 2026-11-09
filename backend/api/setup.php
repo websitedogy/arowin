@@ -92,6 +92,22 @@ try {
         }
     }
 
+    $columnCheck->execute(['table_name' => 'attendance_records', 'column_name' => 'on_time_bonus']);
+    if ((int) $columnCheck->fetchColumn() === 0) {
+        $connection->exec(
+            'ALTER TABLE attendance_records
+             ADD COLUMN on_time_bonus DECIMAL(10, 2) NOT NULL DEFAULT 0.00 AFTER late_deduction'
+        );
+    }
+
+    $columnCheck->execute(['table_name' => 'daily_activities', 'column_name' => 'bonus_amount']);
+    if ((int) $columnCheck->fetchColumn() === 0) {
+        $connection->exec(
+            'ALTER TABLE daily_activities
+             ADD COLUMN bonus_amount DECIMAL(10, 2) NULL AFTER platform'
+        );
+    }
+
     $leaveTypeCheck = $connection->prepare(
         'SELECT COUNT(*) FROM information_schema.COLUMNS
          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name'

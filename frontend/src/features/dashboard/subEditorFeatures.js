@@ -1,6 +1,5 @@
 export const subEditorFeatures = [
   { label: 'Attendance Tracking', path: '/attendance', icon: 'clock', tone: 'sales-orange', status: 'Configure the office location' },
-  { label: 'Package Incentive Setup', path: '/incentives/packages', icon: 'settings', tone: 'sales-purple', status: 'Set incentive rates for each unlock package' },
   { label: 'Total Sales', path: '/sales/total', icon: 'chart', tone: 'sales-blue', status: 'Review pending and approved package sales' },
   { label: "This Week's Sales", path: '/sales/weekly', icon: 'chart', tone: 'sales-green', status: 'Approved package sales recorded this week' },
   { label: 'Incentive Earned', path: '/incentives/earned', icon: 'plus', tone: 'sales-purple', status: 'Incentives from approved package sales' },

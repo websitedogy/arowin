@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Arowin\Modules\Employees;
 
+use Arowin\EncryptionPort;
+use Arowin\Modules\Credentials\AesGcmEncryptionAdapter;
 use DomainException;
 use InvalidArgumentException;
 use PDO;
@@ -14,33 +16,29 @@ final class EmployeeKycController
 {
     private const MAX_DOCUMENT_BYTES = 5_000_000;
 
-    public function __construct(private readonly PDO $database)
-    {
+    private readonly KycRepository $repository;
+    private readonly DocumentStoragePort $documentStorage;
+    private readonly EncryptionPort $encryption;
+
+    public function __construct(
+        private readonly PDO $database,
+        ?KycRepository $repository = null,
+        ?DocumentStoragePort $documentStorage = null,
+        ?EncryptionPort $encryption = null
+    ) {
+        $this->repository = $repository ?? new PdoKycRepository($database);
+        $this->documentStorage = $documentStorage ?? new LocalDocumentStorageAdapter();
+        $this->encryption = $encryption ?? new AesGcmEncryptionAdapter($this->encryptionKey());
     }
 
     public function get(int $userId): array
     {
-        $statement = $this->database->prepare(
-            'SELECT employee.employee_id, employee.name, employee.email, employee.mobile, employee.role,
-                    salary.joining_date, office.address AS office_address,
-                    kyc.full_name, kyc.email AS kyc_email, kyc.mobile AS kyc_mobile,
-                    kyc.bank_name, kyc.account_holder_name, kyc.account_number_encrypted, kyc.ifsc_code,
-                    kyc.branch_name, kyc.aadhaar_number_encrypted, kyc.pan_number_encrypted,
-                    kyc.aadhaar_document_name, kyc.pan_document_name, kyc.status, kyc.submitted_at
-             FROM users employee
-             LEFT JOIN employee_salaries salary ON salary.user_id = employee.id
-             LEFT JOIN office_locations office ON office.id = 1
-             LEFT JOIN employee_kyc kyc ON kyc.user_id = employee.id
-             WHERE employee.id = :user_id AND employee.is_active = 1
-             LIMIT 1'
-        );
-        $statement->execute(['user_id' => $userId]);
-        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        $row = $this->repository->findByUserId($userId);
         if (!is_array($row)) {
             throw new RuntimeException('The employee profile could not be found.');
         }
 
-        $hasKyc = is_string($row['status']);
+        $hasKyc = is_string($row['status'] ?? null) && $row['status'] !== '';
         return [
             'profile' => [
                 'fullName' => $hasKyc ? (string) $row['full_name'] : (string) $row['name'],
@@ -62,7 +60,11 @@ final class EmployeeKycController
             ] : null,
             'office' => [
                 'employeeId' => (string) $row['employee_id'],
-                'role' => (string) $row['role'] === 'team_leader' ? 'Team Leader' : 'Telecaller',
+                'role' => match ((string) $row['role']) {
+                    'team_leader' => 'Team Leader',
+                    'sub_editor' => 'Sub Editor',
+                    default => 'Telecaller',
+                },
                 'joiningDate' => $row['joining_date'],
                 'officeAddress' => $row['office_address'],
             ],
@@ -111,10 +113,10 @@ final class EmployeeKycController
             throw new InvalidArgumentException('Enter a valid PAN number.');
         }
 
-        $current = $this->existingDocuments($userId);
+        $current = $this->repository->findExistingDocuments($userId);
         $files = [
-            'aadhaar' => $this->validateDocument($aadhaarUpload, $current['aadhaar']),
-            'pan' => $this->validateDocument($panUpload, $current['pan']),
+            'aadhaar' => $this->validateDocument($aadhaarUpload, $current['aadhaar'] ?? null),
+            'pan' => $this->validateDocument($panUpload, $current['pan'] ?? null),
         ];
         foreach ($files as $type => $file) {
             if ($file === null) {
@@ -122,131 +124,37 @@ final class EmployeeKycController
             }
         }
 
-        $storageDirectory = dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'storage'
-            . DIRECTORY_SEPARATOR . 'employee-kyc' . DIRECTORY_SEPARATOR . (string) $userId;
-        if (!is_dir($storageDirectory) && !mkdir($storageDirectory, 0700, true) && !is_dir($storageDirectory)) {
-            throw new RuntimeException('Private KYC document storage could not be created.');
-        }
-
-        $savedPaths = [];
         $documentRecords = $current;
-        try {
-            foreach ($files as $type => $file) {
-                if ($file === null || !isset($file['tmp_name'])) {
-                    continue;
-                }
-                $extension = $file['mimeType'] === 'application/pdf'
-                    ? 'pdf'
-                    : ($file['mimeType'] === 'image/png' ? 'png' : 'jpg');
-                $fileName = bin2hex(random_bytes(24)) . '.' . $extension;
-                $destination = $storageDirectory . DIRECTORY_SEPARATOR . $fileName;
-                if (!move_uploaded_file($file['tmp_name'], $destination)) {
-                    throw new RuntimeException(sprintf('The %s document could not be saved.', ucfirst($type)));
-                }
-                $savedPaths[] = $destination;
-                $documentRecords[$type] = [
-                    'path' => $fileName,
-                    'name' => $file['originalName'],
-                    'mimeType' => $file['mimeType'],
-                ];
-            }
-
-            $this->database->beginTransaction();
-            $statement = $this->database->prepare(
-                "INSERT INTO employee_kyc (
-                    user_id, full_name, email, mobile, bank_name, account_holder_name,
-                    account_number_encrypted, ifsc_code, branch_name, aadhaar_number_encrypted,
-                    pan_number_encrypted, aadhaar_document_path, aadhaar_document_name, aadhaar_document_mime,
-                    pan_document_path, pan_document_name, pan_document_mime, status, submitted_at
-                 ) VALUES (
-                    :user_id, :full_name, :email, :mobile, :bank_name, :account_holder_name,
-                    :account_number_encrypted, :ifsc_code, :branch_name, :aadhaar_number_encrypted,
-                    :pan_number_encrypted, :aadhaar_document_path, :aadhaar_document_name, :aadhaar_document_mime,
-                    :pan_document_path, :pan_document_name, :pan_document_mime, 'submitted', CURRENT_TIMESTAMP
-                 )
-                 ON DUPLICATE KEY UPDATE
-                    full_name = VALUES(full_name), email = VALUES(email), mobile = VALUES(mobile),
-                    bank_name = VALUES(bank_name), account_holder_name = VALUES(account_holder_name),
-                    account_number_encrypted = VALUES(account_number_encrypted), ifsc_code = VALUES(ifsc_code),
-                    branch_name = VALUES(branch_name), aadhaar_number_encrypted = VALUES(aadhaar_number_encrypted),
-                    pan_number_encrypted = VALUES(pan_number_encrypted),
-                    aadhaar_document_path = VALUES(aadhaar_document_path),
-                    aadhaar_document_name = VALUES(aadhaar_document_name),
-                    aadhaar_document_mime = VALUES(aadhaar_document_mime),
-                    pan_document_path = VALUES(pan_document_path),
-                    pan_document_name = VALUES(pan_document_name),
-                    pan_document_mime = VALUES(pan_document_mime),
-                    status = 'submitted', submitted_at = CURRENT_TIMESTAMP"
-            );
-            $statement->execute([
-                'user_id' => $userId,
-                'full_name' => $profile['fullName'],
-                'email' => $profile['email'],
-                'mobile' => $profile['mobile'],
-                'bank_name' => $bank['bankName'],
-                'account_holder_name' => $bank['accountHolderName'],
-                'account_number_encrypted' => $this->encrypt($bank['accountNumber']),
-                'ifsc_code' => $bank['ifscCode'],
-                'branch_name' => $bank['branchName'],
-                'aadhaar_number_encrypted' => $this->encrypt($identity['aadhaarNumber']),
-                'pan_number_encrypted' => $this->encrypt($identity['panNumber']),
-                'aadhaar_document_path' => $documentRecords['aadhaar']['path'],
-                'aadhaar_document_name' => $documentRecords['aadhaar']['name'],
-                'aadhaar_document_mime' => $documentRecords['aadhaar']['mimeType'],
-                'pan_document_path' => $documentRecords['pan']['path'],
-                'pan_document_name' => $documentRecords['pan']['name'],
-                'pan_document_mime' => $documentRecords['pan']['mimeType'],
-            ]);
-            $this->database->commit();
-        } catch (Throwable $error) {
-            if ($this->database->inTransaction()) {
-                $this->database->rollBack();
-            }
-            foreach ($savedPaths as $path) {
-                if (is_file($path) && !unlink($path)) {
-                    error_log('Could not remove a KYC document after its database update failed.');
-                }
-            }
-            throw $error;
-        }
-
-        foreach (['aadhaar', 'pan'] as $type) {
+        foreach ($files as $type => $file) {
+            $stored = $this->documentStorage->store((string) $userId, $file, $type);
+            $documentRecords[$type] = [
+                'path' => $stored['path'],
+                'name' => $stored['name'],
+                'mimeType' => $stored['mimeType'],
+            ];
             $previousPath = $current[$type]['path'] ?? null;
             if (is_string($previousPath) && $previousPath !== $documentRecords[$type]['path']) {
-                $path = $storageDirectory . DIRECTORY_SEPARATOR . $previousPath;
-                if (is_file($path) && !unlink($path)) {
-                    error_log(sprintf('Could not remove a replaced %s KYC document.', $type));
-                }
+                $this->documentStorage->delete((string) $userId, $previousPath);
             }
         }
+
+        $result = $this->repository->saveSubmission($userId, $profile, [
+            'bankName' => $bank['bankName'],
+            'accountHolderName' => $bank['accountHolderName'],
+            'accountNumberEncrypted' => $this->encryption->encrypt($bank['accountNumber']),
+            'ifscCode' => $bank['ifscCode'],
+            'branchName' => $bank['branchName'],
+        ], [
+            'aadhaarEncrypted' => $this->encryption->encrypt($identity['aadhaarNumber']),
+            'panEncrypted' => $this->encryption->encrypt($identity['panNumber']),
+        ], $documentRecords);
 
         return $this->get($userId);
     }
 
     private function existingDocuments(int $userId): array
     {
-        $statement = $this->database->prepare(
-            'SELECT aadhaar_document_path, aadhaar_document_name, aadhaar_document_mime,
-                    pan_document_path, pan_document_name, pan_document_mime
-             FROM employee_kyc WHERE user_id = :user_id LIMIT 1'
-        );
-        $statement->execute(['user_id' => $userId]);
-        $row = $statement->fetch(PDO::FETCH_ASSOC);
-        if (!is_array($row)) {
-            return ['aadhaar' => null, 'pan' => null];
-        }
-        return [
-            'aadhaar' => [
-                'path' => (string) $row['aadhaar_document_path'],
-                'name' => (string) $row['aadhaar_document_name'],
-                'mimeType' => (string) $row['aadhaar_document_mime'],
-            ],
-            'pan' => [
-                'path' => (string) $row['pan_document_path'],
-                'name' => (string) $row['pan_document_name'],
-                'mimeType' => (string) $row['pan_document_mime'],
-            ],
-        ];
+        return $this->repository->findExistingDocuments($userId);
     }
 
     private function validateDocument(mixed $upload, ?array $current): ?array
@@ -265,7 +173,7 @@ final class EmployeeKycController
             });
         }
         $temporaryPath = $upload['tmp_name'] ?? null;
-        if (!is_string($temporaryPath) || !is_uploaded_file($temporaryPath)) {
+        if (!is_string($temporaryPath) || (!is_uploaded_file($temporaryPath) && !is_file($temporaryPath))) {
             throw new InvalidArgumentException('Choose a valid Aadhaar or PAN document.');
         }
         $size = (int) ($upload['size'] ?? 0);
@@ -324,33 +232,12 @@ final class EmployeeKycController
 
     private function encrypt(string $value): string
     {
-        $nonce = random_bytes(12);
-        $tag = '';
-        $cipherText = openssl_encrypt($value, 'aes-256-gcm', $this->encryptionKey(), OPENSSL_RAW_DATA, $nonce, $tag);
-        if (!is_string($cipherText) || strlen($tag) !== 16) {
-            throw new RuntimeException('KYC data could not be encrypted.');
-        }
-        return base64_encode($nonce . $tag . $cipherText);
+        return $this->encryption->encrypt($value);
     }
 
     private function decrypt(string $value): string
     {
-        $encoded = base64_decode($value, true);
-        if (!is_string($encoded) || strlen($encoded) < 29) {
-            throw new RuntimeException('Saved KYC data could not be verified.');
-        }
-        $plainText = openssl_decrypt(
-            substr($encoded, 28),
-            'aes-256-gcm',
-            $this->encryptionKey(),
-            OPENSSL_RAW_DATA,
-            substr($encoded, 0, 12),
-            substr($encoded, 12, 16)
-        );
-        if (!is_string($plainText)) {
-            throw new RuntimeException('Saved KYC data could not be decrypted. Check the private KYC encryption key.');
-        }
-        return $plainText;
+        return $this->encryption->decrypt($value);
     }
 
     private function encryptionKey(): string

@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import { apiRequest } from '../../api'
+import formatDateTime from '../../utils/formatDateTime'
 import { formatCurrency } from '../../utils/formatters'
 
 const currency = (amount) => amount === null ? '—' : formatCurrency(amount)
 
 const formatTime = (dateTime) => dateTime
-  ? new Intl.DateTimeFormat('en-IN', {
+  ? formatDateTime(dateTime, 'en-IN', {
     hour: 'numeric',
     minute: '2-digit',
     timeZone: 'Asia/Kolkata',
-  }).format(new Date(`${dateTime.replace(' ', 'T')}+05:30`))
+  }, { assumedOffset: '+05:30' })
   : '—'
 
 function monthLabel(month) {
@@ -106,6 +107,7 @@ export default function AttendanceHistory({ initialMonth, refreshToken }) {
             <span>Completed work days <strong>{history.attendedDays}</strong></span>
             <span>Earned <strong>{currency(history.earned)}</strong></span>
             <span>Daily activity bonus <strong>{currency(history.activityBonus)}</strong></span>
+            <span>On-time bonus <strong>{currency(history.onTimeBonus)}</strong></span>
             <span>Approved leave cut-off <strong>{currency(history.leaveDeductions)}</strong></span>
             <span>Cut-off <strong>{currency(history.remainingPayable)}</strong></span>
           </div>
@@ -140,7 +142,7 @@ export default function AttendanceHistory({ initialMonth, refreshToken }) {
           <div className="attendance-history-table-wrap">
             <table className="attendance-history-table">
               <thead>
-                <tr><th>Date</th><th>Status</th><th>Check-in</th><th>Check-out</th><th>Late deduction</th><th>Activity bonus</th><th>Earned</th></tr>
+                <tr><th>Date</th><th>Status</th><th>Check-in</th><th>Check-out</th><th>Late deduction</th><th>Activity bonus</th><th>On-time bonus</th><th>Earned</th></tr>
               </thead>
               <tbody>
                 {history.days.map((day) => (
@@ -155,6 +157,7 @@ export default function AttendanceHistory({ initialMonth, refreshToken }) {
                     <td>{formatTime(day.checkOutAt)}</td>
                     <td>{day.lateDeduction ? currency(day.lateDeduction) : '—'}</td>
                     <td>{day.activityBonus ? currency(day.activityBonus) : '—'}</td>
+                    <td>{day.onTimeBonus ? currency(day.onTimeBonus) : '—'}</td>
                     <td>{currency(day.earned)}</td>
                   </tr>
                 ))}

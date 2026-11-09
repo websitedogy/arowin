@@ -1516,12 +1516,6 @@
   overflow: visible;
 }
 
-.trend-grid-line {
-  stroke: #e2eaf4;
-  stroke-dasharray: 4 5;
-  stroke-width: 1;
-}
-
 .trend-axis-label {
   fill: #64748b;
   font-family: inherit;
@@ -2144,6 +2138,102 @@
   overflow-wrap: anywhere;
 }
 
+.team-rewards-page-heading {
+  align-items: flex-end;
+}
+
+.sales-month-filter {
+  display: grid;
+  min-width: 185px;
+  gap: 6px;
+  color: #65748b;
+  font-size: .72rem;
+  font-weight: 750;
+}
+
+.sales-month-filter select {
+  min-height: 40px;
+  padding: 0 32px 0 11px;
+  border: 1px solid #dce4ef;
+  border-radius: 9px;
+  background: #fff;
+  color: #192a43;
+  font: inherit;
+}
+
+.team-reward-progress-card {
+  margin-bottom: 16px;
+  padding: 20px;
+}
+
+.team-reward-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.team-reward-progress-heading h2 {
+  margin: 0;
+  color: #162238;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.team-reward-status {
+  padding: 7px 11px;
+  border: 1px solid #dbe4f0;
+  border-radius: 999px;
+  background: #f5f7fb;
+  color: #64748b;
+  font-size: .7rem;
+  font-weight: 800;
+}
+
+.team-reward-status.is-achieved,
+.team-reward-status.is-granted {
+  border-color: #b7ebd1;
+  background: #effaf4;
+  color: #16835d;
+}
+
+.team-reward-progress-track {
+  height: 11px;
+  margin-top: 20px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf2f8;
+}
+
+.team-reward-progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2879df, #19a778);
+  transition: width .25s ease;
+}
+
+.team-reward-progress-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  color: #718097;
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+.team-reward-grant-message {
+  margin: 15px 0 0;
+  padding: 11px 13px;
+  border: 1px solid #e4ebf4;
+  border-radius: 10px;
+  background: #f8fafd;
+  color: #52637b;
+  font-size: .78rem;
+  line-height: 1.5;
+}
+
 .sales-summary-table {
   min-width: 680px;
 }
@@ -2531,41 +2621,235 @@
   margin-left: -19px;
 }
 
-.settings-account-card {
-  max-width: 720px;
-  padding: 22px;
+.settings-amount-card {
+  max-width: 1120px;
+  margin-bottom: 16px;
+  padding: 23px 25px;
 }
 
-.settings-account-card h2 {
-  margin: 0 0 18px;
+.settings-card-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.settings-card-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border: 1px solid #dce8f8;
+  border-radius: 12px;
+  background: #f2f7ff;
+  color: #2469c8;
+  font-size: .73rem;
+  font-weight: 800;
+}
+
+.settings-card-icon.is-activity {
+  border-color: #d7f0e5;
+  background: #effaf5;
+  color: #16835d;
+}
+
+.settings-card-icon.is-sales {
+  border-color: #e6ddff;
+  background: #f5f1ff;
+  color: #7048c7;
+}
+
+.settings-card-heading > div {
+  min-width: 0;
+}
+
+.settings-card-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: #70819b;
+  font-size: .65rem;
+  font-weight: 800;
+  letter-spacing: .11em;
+}
+
+.settings-card-heading h2 {
+  margin: 0;
   color: #162238;
-  font-size: 1rem;
+  font-size: 1.08rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
 }
 
-.settings-account-card dl {
+.settings-card-heading p {
+  margin: 6px 0 0;
+  color: #6a7890;
+  font-size: .8rem;
+  line-height: 1.55;
+}
+
+.settings-inline-form,
+.settings-form-footer {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.settings-amount-field {
   display: grid;
-  gap: 0;
-  margin: 0;
+  min-width: 0;
+  gap: 7px;
 }
 
-.settings-account-card dl > div {
-  display: grid;
-  grid-template-columns: minmax(100px, .35fr) 1fr;
-  gap: 12px;
-  padding: 12px 0;
-  border-top: 1px solid #edf1f7;
-  font-size: .82rem;
-}
-
-.settings-account-card dt {
-  color: #718097;
-  font-weight: 600;
-}
-
-.settings-account-card dd {
-  margin: 0;
-  color: #18263c;
+.settings-amount-field > span:first-child {
+  color: #53647d;
+  font-size: .74rem;
   font-weight: 700;
+}
+
+.settings-currency-input {
+  display: flex;
+  min-width: 0;
+  height: 43px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #dce4ef;
+  border-radius: 10px;
+  background: #fff;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+.settings-currency-input:focus-within {
+  border-color: #4a8ce4;
+  box-shadow: 0 0 0 3px rgba(49, 120, 214, .12);
+}
+
+.settings-currency-input > span {
+  display: grid;
+  height: 100%;
+  min-width: 39px;
+  place-items: center;
+  border-right: 1px solid #e8edf4;
+  background: #f8fafd;
+  color: #71819a;
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+.settings-currency-input input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0 11px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #192a43;
+  font-size: .88rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-inline-form .settings-amount-field {
+  width: min(100%, 300px);
+}
+
+.settings-rate-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 18px;
+}
+
+.settings-form-footer {
+  justify-content: space-between;
+  margin-top: 21px;
+  padding-top: 18px;
+  border-top: 1px solid #edf1f7;
+}
+
+.settings-daily-cap {
+  width: min(100%, 330px);
+}
+
+.settings-save-button {
+  min-height: 42px;
+  padding: 0 17px;
+  border: 1px solid #1e68cb;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2879df, #185dbb);
+  box-shadow: 0 5px 12px rgba(31, 100, 191, .16);
+  color: #fff;
+  cursor: pointer;
+  font-size: .78rem;
+  font-weight: 800;
+  transition: transform .16s ease, box-shadow .16s ease, opacity .16s ease;
+}
+
+.settings-save-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(31, 100, 191, .22);
+}
+
+.settings-save-button:disabled {
+  cursor: wait;
+  opacity: .58;
+}
+
+.settings-amount-card .package-incentive-form {
+  margin: 0;
+  border-color: #edf1f7;
+  border-radius: 13px;
+  background: #fbfcfe;
+}
+
+@media (max-width: 960px) {
+  .settings-rate-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .settings-amount-card {
+    padding: 18px 16px;
+  }
+
+  .settings-rate-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-inline-form,
+  .settings-form-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-inline-form .settings-amount-field,
+  .settings-daily-cap {
+    width: 100%;
+  }
+
+  .settings-save-button {
+    width: 100%;
+  }
+
+  .settings-amount-card .package-incentive-form {
+    padding: 14px;
+  }
+
+  .team-rewards-page-heading,
+  .team-reward-progress-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sales-month-filter {
+    width: 100%;
+  }
+
+  .team-reward-progress-caption {
+    flex-direction: column;
+    gap: 4px;
+  }
 }
 
 @media (max-width: 960px) {

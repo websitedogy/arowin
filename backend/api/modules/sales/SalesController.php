@@ -54,6 +54,7 @@ final class SalesController
                  INNER JOIN team_assignments AS assignment ON assignment.telecaller_id = sales.telecaller_id
                  WHERE assignment.team_leader_id = :user_id
                    AND sales.status = \'approved\'
+                   AND sales.is_employee_credited = 1
                    AND sales.sold_on >= :month_start
                    AND sales.sold_on < :month_end
                  GROUP BY sales.sold_on
@@ -84,7 +85,7 @@ final class SalesController
         $sales = $this->database->prepare(
             "SELECT sold_on, SUM(package_amount) AS amount
              FROM unlock_sales
-             WHERE telecaller_id = :user_id AND status = 'approved'
+             WHERE telecaller_id = :user_id AND status = 'approved' AND is_employee_credited = 1
                AND sold_on >= :month_start AND sold_on < :month_end
              GROUP BY sold_on
              ORDER BY sold_on ASC"
@@ -135,8 +136,8 @@ final class SalesController
         }
 
         $dateFilter = $startDate === null
-            ? "WHERE sales.status = 'approved' AND sales.sold_on < :end_date"
-            : "WHERE sales.status = 'approved' AND sales.sold_on >= :start_date AND sales.sold_on < :end_date";
+            ? "WHERE sales.status = 'approved' AND sales.is_employee_credited = 1 AND sales.emergency_assignment_id IS NULL AND sales.sold_on < :end_date"
+            : "WHERE sales.status = 'approved' AND sales.is_employee_credited = 1 AND sales.emergency_assignment_id IS NULL AND sales.sold_on >= :start_date AND sales.sold_on < :end_date";
         $statement = $this->database->prepare(
             "SELECT salesperson.id, salesperson.employee_id, salesperson.name, salesperson.role,
                     COUNT(sales.id) AS sales_entries,
@@ -171,6 +172,28 @@ final class SalesController
              {$dateFilter}"
         );
         $totalStatement->execute($parameters);
+        $dailySales = [];
+        if ($period === 'this_week') {
+            $dailyStatement = $this->database->prepare(
+                "SELECT sales.sold_on, SUM(sales.package_amount) AS amount
+                 FROM unlock_sales AS sales
+                 INNER JOIN users AS salesperson
+                   ON salesperson.id = sales.telecaller_id
+                  AND salesperson.role IN ('telecaller', 'team_leader')
+                 WHERE sales.status = 'approved'
+                   AND sales.is_employee_credited = 1
+                   AND sales.emergency_assignment_id IS NULL
+                   AND sales.sold_on >= :start_date
+                   AND sales.sold_on < :end_date
+                 GROUP BY sales.sold_on
+                 ORDER BY sales.sold_on ASC"
+            );
+            $dailyStatement->execute($parameters);
+            $dailySales = array_map(static fn (array $row): array => [
+                'date' => (string) $row['sold_on'],
+                'amount' => (string) $row['amount'],
+            ], $dailyStatement->fetchAll(PDO::FETCH_ASSOC));
+        }
 
         return [
             'period' => $period,
@@ -181,6 +204,7 @@ final class SalesController
             'salespersonCount' => count($salespeople),
             'salesEntries' => array_sum(array_column($salespeople, 'salesEntries')),
             'salespeople' => $salespeople,
+            'dailySales' => $dailySales,
         ];
     }
 
@@ -233,6 +257,248 @@ final class SalesController
             'isConfigured' => $row['incentive_amount'] !== null,
             'updatedAt' => $row['updated_at'],
         ], $statement->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    public function listEmergencySalesAssignments(): array
+    {
+        $statement = $this->database->query(
+            'SELECT assignment.id, assignment.package_amount, assignment.expires_at, assignment.note, assignment.created_at,
+                    employee.employee_id, employee.name, employee.role
+             FROM emergency_sales_assignments AS assignment
+             INNER JOIN users AS employee ON employee.id = assignment.employee_id
+             ORDER BY assignment.expires_at ASC, assignment.created_at DESC, assignment.id DESC'
+        );
+        $assignments = array_map(fn (array $row): array => $this->formatEmergencyAssignment($row), $statement->fetchAll(PDO::FETCH_ASSOC));
+        $activeDaysLeft = array_column(
+            array_values(array_filter($assignments, static fn (array $assignment): bool => $assignment['status'] === 'active')),
+            'daysLeft'
+        );
+
+        return [
+            'assignments' => $assignments,
+            'nextExpiryDaysLeft' => $activeDaysLeft === [] ? null : min($activeDaysLeft),
+        ];
+    }
+
+    public function listMyEmergencySalesAssignments(int $employeeId): array
+    {
+        $statement = $this->database->prepare(
+            'SELECT assignment.id, assignment.package_amount, assignment.expires_at, assignment.note, assignment.created_at,
+                    employee.employee_id, employee.name, employee.role
+             FROM emergency_sales_assignments AS assignment
+             INNER JOIN users AS employee ON employee.id = assignment.employee_id
+             WHERE assignment.employee_id = :employee_id
+             ORDER BY assignment.expires_at ASC, assignment.created_at DESC, assignment.id DESC'
+        );
+        $statement->execute(['employee_id' => $employeeId]);
+
+        return array_map(fn (array $row): array => $this->formatEmergencyAssignment($row), $statement->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    public function myEmergencySalesOverview(int $employeeId): array
+    {
+        $salary = $this->database->prepare(
+            'SELECT salary_amount FROM employee_salaries WHERE user_id = :employee_id LIMIT 1'
+        );
+        $salary->execute(['employee_id' => $employeeId]);
+        $monthlySalary = $salary->fetchColumn();
+        $progress = $this->emergencySalesProgress($employeeId);
+
+        return [
+            'monthlySalaryInr' => $monthlySalary === false || $monthlySalary === null
+                ? null
+                : (string) $monthlySalary,
+            ...$progress,
+        ];
+    }
+
+    public function emergencySalesProgress(int $employeeId): array
+    {
+        $assignmentQuery = $this->database->prepare(
+            'SELECT id, package_amount, expires_at, created_at
+             FROM emergency_sales_assignments
+             WHERE employee_id = :employee_id
+             ORDER BY created_at DESC, id DESC
+             LIMIT 1'
+        );
+        $assignmentQuery->execute(['employee_id' => $employeeId]);
+        $assignment = $assignmentQuery->fetch(PDO::FETCH_ASSOC);
+
+        if (!is_array($assignment)) {
+            return [
+                'emergencyAssignment' => null,
+                'pendingSales' => ['count' => 0, 'amount' => '0.00'],
+                'approvedSales' => ['count' => 0, 'amount' => '0.00'],
+                'emergencySales' => [],
+                'approvedEmergencySalesAmount' => '0.00',
+                'remainingEmergencySalesAmount' => null,
+                'unlockSalesUnlocked' => false,
+                'canSubmitEmergencySale' => false,
+            ];
+        }
+
+        $sales = $this->database->prepare(
+            "SELECT
+                COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) AS pending_count,
+                COALESCE(SUM(CASE WHEN status = 'pending' THEN package_amount ELSE 0 END), 0.00) AS pending_amount,
+                COALESCE(SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END), 0) AS approved_count,
+                COALESCE(SUM(CASE WHEN status = 'approved' THEN package_amount ELSE 0 END), 0.00) AS approved_amount
+             FROM unlock_sales
+             WHERE emergency_assignment_id = :assignment_id
+               AND telecaller_id = :employee_id
+               AND is_employee_credited = 1"
+        );
+        $sales->execute([
+            'assignment_id' => $assignment['id'],
+            'employee_id' => $employeeId,
+        ]);
+        $summary = $sales->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($summary)) {
+            throw new \RuntimeException('Emergency sales progress could not be loaded.');
+        }
+
+        $entries = $this->database->prepare(
+            'SELECT id, customer_reference, package_amount, status, rejection_reason, sold_on, created_at
+             FROM unlock_sales
+             WHERE emergency_assignment_id = :assignment_id AND telecaller_id = :employee_id
+             ORDER BY created_at DESC, id DESC
+             LIMIT 100'
+        );
+        $entries->execute([
+            'assignment_id' => $assignment['id'],
+            'employee_id' => $employeeId,
+        ]);
+        $targetAmount = (float) $assignment['package_amount'];
+        $approvedAmount = (float) $summary['approved_amount'];
+        $isComplete = $approvedAmount >= $targetAmount;
+        $expiresAt = new DateTimeImmutable((string) $assignment['expires_at'], AppTime::timeZone());
+        $today = AppTime::now()->setTime(0, 0);
+
+        return [
+            'emergencyAssignment' => [
+                'id' => (int) $assignment['id'],
+                'packageAmount' => (string) $assignment['package_amount'],
+                'expiresAt' => $expiresAt->format('Y-m-d'),
+                'assignedAt' => (string) $assignment['created_at'],
+                'status' => $expiresAt >= $today ? 'active' : 'expired',
+            ],
+            'pendingSales' => [
+                'count' => (int) $summary['pending_count'],
+                'amount' => ValueFormatter::formatAmount((string) $summary['pending_amount']),
+            ],
+            'approvedSales' => [
+                'count' => (int) $summary['approved_count'],
+                'amount' => ValueFormatter::formatAmount((string) $summary['approved_amount']),
+            ],
+            'emergencySales' => array_map(static fn (array $row): array => [
+                'id' => (int) $row['id'],
+                'customerReference' => (string) $row['customer_reference'],
+                'packageAmount' => (string) $row['package_amount'],
+                'status' => (string) $row['status'],
+                'rejectionReason' => $row['rejection_reason'] === null ? null : (string) $row['rejection_reason'],
+                'soldOn' => (string) $row['sold_on'],
+                'createdAt' => (string) $row['created_at'],
+            ], $entries->fetchAll(PDO::FETCH_ASSOC)),
+            'approvedEmergencySalesAmount' => ValueFormatter::formatAmount((string) $summary['approved_amount']),
+            'remainingEmergencySalesAmount' => ValueFormatter::formatAmount(max(0, $targetAmount - $approvedAmount)),
+            'unlockSalesUnlocked' => $isComplete,
+            'canSubmitEmergencySale' => !$isComplete,
+        ];
+    }
+
+    private function formatEmergencyAssignment(array $row): array
+    {
+        $today = AppTime::now()->setTime(0, 0);
+        $expiresAt = new DateTimeImmutable((string) $row['expires_at'], AppTime::timeZone());
+        $daysLeft = max(0, (int) $today->diff($expiresAt)->format('%r%a'));
+        return [
+            'id' => (int) $row['id'],
+            'employeeId' => (string) $row['employee_id'],
+            'employeeName' => (string) $row['name'],
+            'employeeRole' => (string) $row['role'],
+            'packageAmount' => (string) $row['package_amount'],
+            'expiresAt' => $expiresAt->format('Y-m-d'),
+            'note' => (string) $row['note'],
+            'daysLeft' => $daysLeft,
+            'status' => $expiresAt >= $today ? 'active' : 'expired',
+            'assignedAt' => (string) $row['created_at'],
+        ];
+    }
+
+    public function assignEmergencyPackage(array $payload, int $assignedBy): array
+    {
+        $employeeId = filter_var($payload['employeeId'] ?? null, FILTER_VALIDATE_INT);
+        $rawPackageAmount = trim((string) ($payload['packageAmount'] ?? ''));
+        $rawExpiryDate = trim((string) ($payload['expiryDate'] ?? ''));
+        $note = trim((string) ($payload['note'] ?? ''));
+        if ($employeeId === false || $employeeId < 1) {
+            throw new \InvalidArgumentException('Choose an active Team Leader or Telecaller.');
+        }
+        if (!ValueFormatter::isValidSalesAmount($rawPackageAmount)
+            || (float) $rawPackageAmount <= 0
+            || strlen(explode('.', $rawPackageAmount, 2)[0]) > 8) {
+            throw new \InvalidArgumentException('Enter an emergency sales amount greater than zero.');
+        }
+        $packageAmount = ValueFormatter::formatAmount($rawPackageAmount);
+        $expiryDate = DateTimeImmutable::createFromFormat('!Y-m-d', $rawExpiryDate, AppTime::timeZone());
+        $dateErrors = DateTimeImmutable::getLastErrors();
+        $today = AppTime::now()->setTime(0, 0);
+        if ($expiryDate === false
+            || $expiryDate->format('Y-m-d') !== $rawExpiryDate
+            || ($dateErrors !== false && ($dateErrors['warning_count'] > 0 || $dateErrors['error_count'] > 0))
+            || $expiryDate < $today
+            || $expiryDate > $today->modify('+365 days')) {
+            throw new \InvalidArgumentException('Choose an expiry date from today through the next 365 days.');
+        }
+        if (strlen($note) > 500) {
+            throw new \InvalidArgumentException('The optional note must be 500 characters or fewer.');
+        }
+
+        $employee = $this->database->prepare(
+            "SELECT id FROM users
+             WHERE id = :employee_id AND role IN ('team_leader', 'telecaller') AND is_active = 1
+             LIMIT 1"
+        );
+        $employee->execute(['employee_id' => $employeeId]);
+        if ($employee->fetchColumn() === false) {
+            throw new \InvalidArgumentException('Choose an active Team Leader or Telecaller.');
+        }
+
+        $activeAssignment = $this->database->prepare(
+            'SELECT id FROM emergency_sales_assignments
+             WHERE employee_id = :employee_id AND expires_at >= :today
+             LIMIT 1'
+        );
+        $activeAssignment->execute([
+            'employee_id' => $employeeId,
+            'today' => $today->format('Y-m-d'),
+        ]);
+        if ($activeAssignment->fetchColumn() !== false) {
+            throw new \DomainException('This employee already has an active emergency sales assignment.');
+        }
+
+        $expiresAt = $expiryDate->format('Y-m-d');
+        $insert = $this->database->prepare(
+            'INSERT INTO emergency_sales_assignments (employee_id, package_amount, expires_at, note, assigned_by)
+             VALUES (:employee_id, :package_amount, :expires_at, :note, :assigned_by)'
+        );
+        $insert->execute([
+            'employee_id' => $employeeId,
+            'package_amount' => $packageAmount,
+            'expires_at' => $expiresAt,
+            'note' => $note,
+            'assigned_by' => $assignedBy,
+        ]);
+
+        return [
+            'id' => (int) $this->database->lastInsertId(),
+            'employeeId' => $employeeId,
+            'packageAmount' => $packageAmount,
+            'expiresAt' => $expiresAt,
+            'note' => $note,
+            'daysLeft' => max(0, (int) $today->diff($expiryDate)->format('%r%a')),
+            'status' => $expiryDate >= $today ? 'active' : 'expired',
+        ];
     }
 
     public function configureUnlockPackages(array $payload, int $configuredBy): array
@@ -288,9 +554,82 @@ final class SalesController
         return $this->listUnlockPackages();
     }
 
-    public function submitUnlockSale(): array
+    public function submitUnlockSale(int $employeeId, array $customer, ?int $emergencyAssignmentId = null): array
     {
-        throw new \DomainException('Arowin Global customer and package lookup is not configured. Sales cannot be submitted until a verified customer package can be loaded.');
+        $customerId = trim((string) ($customer['customerId'] ?? ''));
+        $packageAmount = (string) ($customer['packageAmount'] ?? '');
+        $isEmployeeCredited = $customer['isEmployeeCredited'] ?? null;
+        if (
+            $customerId === ''
+            || strlen($customerId) > 80
+            || !in_array($packageAmount, self::UNLOCK_PACKAGE_AMOUNTS, true)
+            || !is_bool($isEmployeeCredited)
+        ) {
+            throw new \InvalidArgumentException('Look up a customer with a valid Arowin Global package before submitting.');
+        }
+
+        $package = $this->database->prepare(
+            'SELECT package_amount FROM unlock_package_incentives WHERE package_amount = :package_amount LIMIT 1'
+        );
+        $package->execute(['package_amount' => $packageAmount]);
+        if ($package->fetchColumn() === false) {
+            throw new \RuntimeException('The activated package is not configured for sales review.');
+        }
+
+        if ($emergencyAssignmentId !== null) {
+            $progress = $this->emergencySalesProgress($employeeId);
+            if (
+                $progress['emergencyAssignment'] === null
+                || $progress['emergencyAssignment']['id'] !== $emergencyAssignmentId
+                || !$progress['canSubmitEmergencySale']
+            ) {
+                throw new \DomainException('There is no incomplete emergency sales assignment available.');
+            }
+            if (!$isEmployeeCredited) {
+                throw new \InvalidArgumentException('Only employee-credited sales can complete an emergency sales assignment.');
+            }
+        }
+
+        $soldOn = AppTime::now()->format('Y-m-d');
+        if ($emergencyAssignmentId === null) {
+            $insert = $this->database->prepare(
+                "INSERT INTO unlock_sales
+                    (telecaller_id, customer_reference, package_amount, is_employee_credited, status, sold_on)
+                 VALUES (:employee_id, :customer_reference, :package_amount, :is_employee_credited, 'pending', :sold_on)"
+            );
+            $insert->execute([
+                'employee_id' => $employeeId,
+                'customer_reference' => $customerId,
+                'package_amount' => $packageAmount,
+                'is_employee_credited' => $isEmployeeCredited ? 1 : 0,
+                'sold_on' => $soldOn,
+            ]);
+        } else {
+            $insert = $this->database->prepare(
+                "INSERT INTO unlock_sales
+                    (telecaller_id, customer_reference, package_amount, is_employee_credited,
+                     emergency_assignment_id, status, sold_on)
+                 VALUES (:employee_id, :customer_reference, :package_amount, 1,
+                         :emergency_assignment_id, 'pending', :sold_on)"
+            );
+            $insert->execute([
+                'employee_id' => $employeeId,
+                'customer_reference' => $customerId,
+                'package_amount' => $packageAmount,
+                'emergency_assignment_id' => $emergencyAssignmentId,
+                'sold_on' => $soldOn,
+            ]);
+        }
+
+        return [
+            'id' => (int) $this->database->lastInsertId(),
+            'customerReference' => $customerId,
+            'packageAmount' => $packageAmount,
+            'isEmployeeCredited' => $isEmployeeCredited,
+            'status' => 'pending',
+            'soldOn' => $soldOn,
+            'emergencyAssignmentId' => $emergencyAssignmentId,
+        ];
     }
 
     public function teamUnlockAchievements(int $employeeId, string $role): array
@@ -321,6 +660,8 @@ final class SalesController
                ON employee.id = sale.telecaller_id AND employee.role = 'telecaller'
              WHERE assignment.team_leader_id = :team_leader_id
                AND sale.status = 'approved'
+               AND sale.is_employee_credited = 1
+               AND sale.emergency_assignment_id IS NULL
              ORDER BY sale.reviewed_at DESC, sale.id DESC
              LIMIT 500"
         );
@@ -353,6 +694,8 @@ final class SalesController
                ON employee.id = assignment.telecaller_id AND employee.role = 'telecaller'
              LEFT JOIN unlock_sales AS sale
                ON sale.telecaller_id = employee.id AND sale.status = 'approved'
+              AND sale.is_employee_credited = 1
+              AND sale.emergency_assignment_id IS NULL
              WHERE assignment.team_leader_id = :team_leader_id
              GROUP BY employee.id, employee.employee_id, employee.name
              ORDER BY total_incentive DESC, employee.name ASC"
@@ -367,6 +710,8 @@ final class SalesController
                ON employee.id = assignment.telecaller_id AND employee.role = 'telecaller'
              LEFT JOIN unlock_sales AS sale
                ON sale.telecaller_id = employee.id AND sale.status = 'approved'
+              AND sale.is_employee_credited = 1
+              AND sale.emergency_assignment_id IS NULL
              WHERE assignment.team_leader_id = :team_leader_id"
         );
         $totals->execute(['team_leader_id' => $teamLeaderId]);
@@ -380,6 +725,8 @@ final class SalesController
                ON employee.id = assignment.telecaller_id AND employee.role = 'telecaller'
              INNER JOIN unlock_sales AS sale
                ON sale.telecaller_id = employee.id AND sale.status = 'approved'
+              AND sale.is_employee_credited = 1
+              AND sale.emergency_assignment_id IS NULL
              WHERE assignment.team_leader_id = :team_leader_id
              ORDER BY sale.reviewed_at DESC, sale.id DESC
              LIMIT 500"
@@ -498,6 +845,8 @@ final class SalesController
                ON employee.id = assignment.telecaller_id AND employee.role = 'telecaller'
              INNER JOIN unlock_sales AS sale
                ON sale.telecaller_id = employee.id AND sale.status = 'approved'
+              AND sale.is_employee_credited = 1
+              AND sale.emergency_assignment_id IS NULL
              WHERE assignment.team_leader_id = :team_leader_id
                AND sale.sold_on >= :month_start AND sale.sold_on < :month_end"
         );
@@ -518,6 +867,8 @@ final class SalesController
              LEFT JOIN unlock_sales AS sale
                ON sale.telecaller_id = employee.id
               AND sale.status = 'approved'
+              AND sale.is_employee_credited = 1
+              AND sale.emergency_assignment_id IS NULL
               AND sale.sold_on >= :month_start
               AND sale.sold_on < :month_end
              WHERE assignment.team_leader_id = :team_leader_id
@@ -615,6 +966,8 @@ final class SalesController
                ON employee.id = assignment.telecaller_id AND employee.role = 'telecaller'
              INNER JOIN unlock_sales AS sale
                ON sale.telecaller_id = employee.id AND sale.status = 'approved'
+              AND sale.is_employee_credited = 1
+              AND sale.emergency_assignment_id IS NULL
              WHERE assignment.team_leader_id = :team_leader_id
                AND sale.sold_on >= :month_start AND sale.sold_on < :month_end"
         );
@@ -860,6 +1213,8 @@ final class SalesController
              LEFT JOIN unlock_sales AS sale
                ON sale.telecaller_id = employee.id
               AND sale.status = 'approved'
+              AND sale.is_employee_credited = 1
+              AND sale.emergency_assignment_id IS NULL
               AND sale.sold_on >= :month_start
               AND sale.sold_on < :month_end
              WHERE assignment.team_leader_id = :team_leader_id
@@ -918,7 +1273,7 @@ final class SalesController
     public function employeeUnlockSales(int $employeeId): array
     {
         $statement = $this->database->prepare(
-            'SELECT id, customer_reference, package_amount, status, incentive_amount,
+            'SELECT id, customer_reference, package_amount, is_employee_credited, emergency_assignment_id, status, incentive_amount,
                     rejection_reason, sold_on, created_at, reviewed_at
              FROM unlock_sales
              WHERE telecaller_id = :telecaller_id
@@ -930,8 +1285,14 @@ final class SalesController
             'id' => (int) $row['id'],
             'customerReference' => (string) $row['customer_reference'],
             'packageAmount' => (string) $row['package_amount'],
+            'isEmployeeCredited' => (bool) $row['is_employee_credited'],
+            'emergencyAssignmentId' => $row['emergency_assignment_id'] === null
+                ? null
+                : (int) $row['emergency_assignment_id'],
             'status' => (string) $row['status'],
-            'incentiveAmount' => $row['incentive_amount'] === null ? null : (string) $row['incentive_amount'],
+            'incentiveAmount' => $row['emergency_assignment_id'] !== null || $row['incentive_amount'] === null
+                ? null
+                : (string) $row['incentive_amount'],
             'rejectionReason' => $row['rejection_reason'] === null ? null : (string) $row['rejection_reason'],
             'soldOn' => (string) $row['sold_on'],
             'createdAt' => (string) $row['created_at'],
@@ -941,7 +1302,8 @@ final class SalesController
         $earnedQuery = $this->database->prepare(
             "SELECT COALESCE(SUM(incentive_amount), 0.00)
              FROM unlock_sales
-             WHERE telecaller_id = :telecaller_id AND status = 'approved'"
+             WHERE telecaller_id = :telecaller_id AND status = 'approved'
+               AND is_employee_credited = 1 AND emergency_assignment_id IS NULL"
         );
         $earnedQuery->execute(['telecaller_id' => $employeeId]);
 
@@ -951,26 +1313,46 @@ final class SalesController
         ];
     }
 
-    public function listUnlockSalesForReview(string $status): array
+    public function listUnlockSalesForReview(string $status, string $type = 'all'): array
     {
         if (!in_array($status, ['all', 'pending', 'approved', 'rejected'], true)) {
             throw new \InvalidArgumentException('Choose a valid unlock sale status.');
         }
+        if (!in_array($type, ['all', 'regular', 'emergency'], true)) {
+            throw new \InvalidArgumentException('Choose regular, emergency, or all unlock sales.');
+        }
 
+        $typeFilter = match ($type) {
+            'regular' => ' WHERE emergency_assignment_id IS NULL',
+            'emergency' => ' WHERE emergency_assignment_id IS NOT NULL',
+            default => '',
+        };
         $summary = $this->database->query(
             "SELECT
                 COUNT(*) AS total_count,
                 COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) AS pending_count,
                 COALESCE(SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END), 0) AS approved_count,
                 COALESCE(SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END), 0) AS rejected_count,
-                COALESCE(SUM(CASE WHEN status = 'pending' THEN package_amount ELSE 0 END), 0.00) AS pending_amount,
-                COALESCE(SUM(CASE WHEN status = 'approved' THEN package_amount ELSE 0 END), 0.00) AS approved_amount
-             FROM unlock_sales"
+                COALESCE(SUM(CASE WHEN status = 'pending' AND is_employee_credited = 1 THEN package_amount ELSE 0 END), 0.00) AS pending_amount,
+                COALESCE(SUM(CASE WHEN status = 'approved' AND is_employee_credited = 1 THEN package_amount ELSE 0 END), 0.00) AS approved_amount
+             FROM unlock_sales{$typeFilter}"
         )->fetch(PDO::FETCH_ASSOC);
 
-        $statusFilter = $status === 'all' ? '' : 'WHERE sale.status = :status';
+        $filters = [];
+        $parameters = [];
+        if ($status !== 'all') {
+            $filters[] = 'sale.status = :status';
+            $parameters['status'] = $status;
+        }
+        if ($type === 'regular') {
+            $filters[] = 'sale.emergency_assignment_id IS NULL';
+        } elseif ($type === 'emergency') {
+            $filters[] = 'sale.emergency_assignment_id IS NOT NULL';
+        }
+        $statusFilter = $filters ? 'WHERE ' . implode(' AND ', $filters) : '';
         $statement = $this->database->prepare(
-            "SELECT sale.id, sale.customer_reference, sale.package_amount, sale.status,
+            "SELECT sale.id, sale.customer_reference, sale.package_amount, sale.is_employee_credited,
+                    sale.emergency_assignment_id, sale.status,
                     sale.incentive_amount, sale.rejection_reason, sale.sold_on,
                     sale.created_at, sale.reviewed_at, employee.employee_id, employee.name AS employee_name,
                     employee.role AS employee_role,
@@ -982,11 +1364,7 @@ final class SalesController
              ORDER BY CASE sale.status WHEN 'pending' THEN 0 ELSE 1 END, sale.created_at DESC, sale.id DESC
              LIMIT 1000"
         );
-        if ($status === 'all') {
-            $statement->execute();
-        } else {
-            $statement->execute(['status' => $status]);
-        }
+        $statement->execute($parameters);
 
         return [
             'summary' => [
@@ -1001,8 +1379,14 @@ final class SalesController
                 'id' => (int) $row['id'],
                 'customerReference' => (string) $row['customer_reference'],
                 'packageAmount' => (string) $row['package_amount'],
+                'isEmployeeCredited' => (bool) $row['is_employee_credited'],
+                'emergencyAssignmentId' => $row['emergency_assignment_id'] === null
+                    ? null
+                    : (int) $row['emergency_assignment_id'],
                 'status' => (string) $row['status'],
-                'incentiveAmount' => $row['incentive_amount'] === null ? null : (string) $row['incentive_amount'],
+                'incentiveAmount' => $row['emergency_assignment_id'] !== null || $row['incentive_amount'] === null
+                    ? null
+                    : (string) $row['incentive_amount'],
                 'rejectionReason' => $row['rejection_reason'] === null ? null : (string) $row['rejection_reason'],
                 'employeeId' => (string) $row['employee_id'],
                 'employeeName' => (string) $row['employee_name'],
@@ -1031,9 +1415,13 @@ final class SalesController
 
         $this->database->beginTransaction();
         try {
+            $lockClause = $this->database->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite'
+                ? ''
+                : ' FOR UPDATE';
             $saleQuery = $this->database->prepare(
-                'SELECT status, package_amount, telecaller_id, sold_on
-                 FROM unlock_sales WHERE id = :id FOR UPDATE'
+                "SELECT status, package_amount, telecaller_id, sold_on, is_employee_credited,
+                        emergency_assignment_id
+                 FROM unlock_sales WHERE id = :id{$lockClause}"
             );
             $saleQuery->execute(['id' => $saleId]);
             $sale = $saleQuery->fetch(PDO::FETCH_ASSOC);
@@ -1045,7 +1433,8 @@ final class SalesController
             }
 
             $incentiveAmount = null;
-            if ($decision === 'approved') {
+            $isEmergencySale = $sale['emergency_assignment_id'] !== null;
+            if ($decision === 'approved' && (bool) $sale['is_employee_credited'] && !$isEmergencySale) {
                 $packageQuery = $this->database->prepare(
                     'SELECT incentive_amount FROM unlock_package_incentives
                      WHERE package_amount = :package_amount FOR UPDATE'
@@ -1075,7 +1464,7 @@ final class SalesController
             if ($update->rowCount() !== 1) {
                 throw new \DomainException('This unlock sale has already been reviewed.');
             }
-            if ($decision === 'approved') {
+            if ($decision === 'approved' && (bool) $sale['is_employee_credited'] && !$isEmergencySale) {
                 $assignment = $this->database->prepare(
                     "SELECT assignment.team_leader_id
                      FROM team_assignments AS assignment
@@ -1108,6 +1497,7 @@ final class SalesController
             'id' => $saleId,
             'status' => $decision,
             'incentiveAmount' => $incentiveAmount === null ? null : (string) $incentiveAmount,
+            'isEmployeeCredited' => (bool) $sale['is_employee_credited'],
             'rejectionReason' => $decision === 'rejected' ? $reason : null,
         ];
     }
@@ -1117,7 +1507,8 @@ final class SalesController
         $statement = $this->database->prepare(
             "SELECT id, customer_reference, package_amount, incentive_amount, sold_on, reviewed_at
              FROM unlock_sales
-             WHERE telecaller_id = :telecaller_id AND status = 'approved'
+            WHERE telecaller_id = :telecaller_id AND status = 'approved'
+              AND is_employee_credited = 1 AND emergency_assignment_id IS NULL
              ORDER BY reviewed_at DESC, id DESC
              LIMIT 500"
         );
@@ -1125,7 +1516,8 @@ final class SalesController
         $earnedQuery = $this->database->prepare(
             "SELECT COALESCE(SUM(incentive_amount), 0.00)
              FROM unlock_sales
-             WHERE telecaller_id = :telecaller_id AND status = 'approved'"
+            WHERE telecaller_id = :telecaller_id AND status = 'approved'
+              AND is_employee_credited = 1 AND emergency_assignment_id IS NULL"
         );
         $earnedQuery->execute(['telecaller_id' => $employeeId]);
 
@@ -1142,6 +1534,186 @@ final class SalesController
         ];
     }
 
+    public function subEditorPaidIncentives(string $month): array
+    {
+        $monthStart = ValueFormatter::normalizeMonth($month, 'Choose a valid incentive month.');
+        $nextMonthStart = (new DateTimeImmutable($monthStart))->modify('first day of next month')->format('Y-m-d');
+        $statement = $this->database->prepare(
+            "SELECT employee.id, employee.employee_id, employee.name, employee.role,
+                    COALESCE(sales.earned_amount, 0.00)
+                        + COALESCE(reward.earned_amount, 0.00)
+                        + COALESCE(grant_record.earned_amount, 0.00) AS earned_amount,
+                    COALESCE(sales.approved_sales, 0) AS approved_sales,
+                    payout.amount AS paid_amount, payout.paid_at
+             FROM users AS employee
+             LEFT JOIN (
+                SELECT telecaller_id AS employee_id, SUM(incentive_amount) AS earned_amount,
+                       COUNT(*) AS approved_sales
+                FROM unlock_sales
+                WHERE status = 'approved' AND is_employee_credited = 1
+                  AND emergency_assignment_id IS NULL
+                  AND sold_on >= :sales_month_start AND sold_on < :sales_next_month_start
+                GROUP BY telecaller_id
+             ) AS sales ON sales.employee_id = employee.id
+             LEFT JOIN (
+                SELECT team_leader_id AS employee_id, SUM(reward_amount) AS earned_amount
+                FROM team_leader_target_rewards
+                WHERE target_month >= :reward_month_start AND target_month < :reward_next_month_start
+                GROUP BY team_leader_id
+             ) AS reward ON reward.employee_id = employee.id
+             LEFT JOIN (
+                SELECT team_leader_id AS employee_id, SUM(leader_incentive_amount) AS earned_amount
+                FROM team_grant_incentives
+                WHERE target_month >= :grant_month_start AND target_month < :grant_next_month_start
+                GROUP BY team_leader_id
+             ) AS grant_record ON grant_record.employee_id = employee.id
+             LEFT JOIN employee_incentive_payouts AS payout
+               ON payout.employee_id = employee.id AND payout.payout_month = :payout_month
+             WHERE employee.role IN ('team_leader', 'telecaller')
+             ORDER BY employee.name ASC, employee.id ASC"
+        );
+        $statement->execute([
+            'sales_month_start' => $monthStart,
+            'sales_next_month_start' => $nextMonthStart,
+            'reward_month_start' => $monthStart,
+            'reward_next_month_start' => $nextMonthStart,
+            'grant_month_start' => $monthStart,
+            'grant_next_month_start' => $nextMonthStart,
+            'payout_month' => $monthStart,
+        ]);
+        $employees = [];
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $earnedAmount = (float) $row['earned_amount'];
+            if ($earnedAmount <= 0) {
+                continue;
+            }
+            $employees[] = [
+                'id' => (int) $row['id'],
+                'employeeId' => (string) $row['employee_id'],
+                'name' => (string) $row['name'],
+                'role' => (string) $row['role'],
+                'approvedSales' => (int) $row['approved_sales'],
+                'earnedAmount' => ValueFormatter::formatAmount($earnedAmount),
+                'paidAmount' => $row['paid_amount'] === null ? null : (string) $row['paid_amount'],
+                'paidAt' => $row['paid_at'],
+                'isPaid' => $row['paid_amount'] !== null,
+            ];
+        }
+
+        return [
+            'month' => substr($monthStart, 0, 7),
+            'employees' => $employees,
+        ];
+    }
+
+    public function markMonthlyIncentivePaid(int $employeeId, string $month, int $paidBy): array
+    {
+        if ($employeeId < 1) {
+            throw new \InvalidArgumentException('Choose a valid employee.');
+        }
+
+        $report = $this->subEditorPaidIncentives($month);
+        $employee = null;
+        foreach ($report['employees'] as $row) {
+            if ($row['id'] === $employeeId) {
+                $employee = $row;
+                break;
+            }
+        }
+        if ($employee === null) {
+            throw new \DomainException('No earned incentive is available for this employee and month.');
+        }
+        if ($employee['isPaid']) {
+            throw new \DomainException('This employee’s incentive has already been marked paid for the month.');
+        }
+
+        $monthStart = ValueFormatter::normalizeMonth($month, 'Choose a valid incentive month.');
+        try {
+            $statement = $this->database->prepare(
+                'INSERT INTO employee_incentive_payouts (employee_id, payout_month, amount, paid_by)
+                 VALUES (:employee_id, :payout_month, :amount, :paid_by)'
+            );
+            $statement->execute([
+                'employee_id' => $employeeId,
+                'payout_month' => $monthStart,
+                'amount' => $employee['earnedAmount'],
+                'paid_by' => $paidBy,
+            ]);
+        } catch (PDOException $error) {
+            if ($error->getCode() !== '23000') {
+                throw $error;
+            }
+            throw new \DomainException('This employee’s incentive has already been marked paid for the month.');
+        }
+
+        $paidAtQuery = $this->database->prepare(
+            'SELECT paid_at FROM employee_incentive_payouts
+             WHERE employee_id = :employee_id AND payout_month = :payout_month'
+        );
+        $paidAtQuery->execute([
+            'employee_id' => $employeeId,
+            'payout_month' => $monthStart,
+        ]);
+
+        return [
+            'employeeId' => $employee['employeeId'],
+            'name' => $employee['name'],
+            'month' => substr($monthStart, 0, 7),
+            'paidAmount' => $employee['earnedAmount'],
+            'paidAt' => (string) $paidAtQuery->fetchColumn(),
+        ];
+    }
+
+    public function subEditorAchievedRewards(): array
+    {
+        $statement = $this->database->query(
+            "SELECT leader.employee_id, leader.name AS leader_name, reward.target_month,
+                    reward.target_amount, reward.achieved_sales_amount, reward.reward_amount, reward.granted_at
+             FROM team_leader_target_rewards AS reward
+             INNER JOIN users AS leader
+               ON leader.id = reward.team_leader_id AND leader.role = 'team_leader'
+             ORDER BY reward.target_month DESC, leader.name ASC, reward.id DESC
+             LIMIT 1000"
+        );
+
+        return array_map(static fn (array $row): array => [
+            'employeeId' => (string) $row['employee_id'],
+            'leaderName' => (string) $row['leader_name'],
+            'month' => substr((string) $row['target_month'], 0, 7),
+            'targetAmount' => (string) $row['target_amount'],
+            'achievedSalesAmount' => (string) $row['achieved_sales_amount'],
+            'rewardAmount' => (string) $row['reward_amount'],
+            'grantedAt' => (string) $row['granted_at'],
+        ], $statement->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    public function subEditorGrantedRewards(): array
+    {
+        $statement = $this->database->query(
+            "SELECT leader.employee_id, leader.name AS leader_name, grant_record.target_month,
+                    grant_record.team_target_amount, grant_record.team_member_count,
+                    grant_record.team_incentive_amount, grant_record.leader_share_percent,
+                    grant_record.leader_incentive_amount, grant_record.granted_at
+             FROM team_grant_incentives AS grant_record
+             INNER JOIN users AS leader
+               ON leader.id = grant_record.team_leader_id AND leader.role = 'team_leader'
+             ORDER BY grant_record.target_month DESC, leader.name ASC, grant_record.id DESC
+             LIMIT 1000"
+        );
+
+        return array_map(static fn (array $row): array => [
+            'employeeId' => (string) $row['employee_id'],
+            'leaderName' => (string) $row['leader_name'],
+            'month' => substr((string) $row['target_month'], 0, 7),
+            'teamTargetAmount' => (string) $row['team_target_amount'],
+            'teamMemberCount' => (int) $row['team_member_count'],
+            'teamIncentiveAmount' => (string) $row['team_incentive_amount'],
+            'leaderSharePercent' => (string) $row['leader_share_percent'],
+            'leaderIncentiveAmount' => (string) $row['leader_incentive_amount'],
+            'grantedAt' => (string) $row['granted_at'],
+        ], $statement->fetchAll(PDO::FETCH_ASSOC));
+    }
+
     public function subEditorEarnedIncentives(): array
     {
         $statement = $this->database->query(
@@ -1151,6 +1723,8 @@ final class SalesController
              FROM unlock_sales AS sale
              INNER JOIN users AS employee ON employee.id = sale.telecaller_id
              WHERE sale.status = 'approved'
+               AND sale.is_employee_credited = 1
+               AND sale.emergency_assignment_id IS NULL
                AND employee.role IN ('telecaller', 'team_leader')
              GROUP BY employee.id, employee.employee_id, employee.name, employee.role
              ORDER BY total_incentive DESC, employee.name ASC"
@@ -1161,13 +1735,17 @@ final class SalesController
              FROM unlock_sales AS sale
              INNER JOIN users AS employee ON employee.id = sale.telecaller_id
              WHERE sale.status = 'approved'
+               AND sale.is_employee_credited = 1
+               AND sale.emergency_assignment_id IS NULL
                AND employee.role IN ('telecaller', 'team_leader')
              ORDER BY sale.reviewed_at DESC, sale.id DESC
              LIMIT 1000"
         );
         $totalQuery = $this->database->query(
             "SELECT COALESCE(SUM(incentive_amount), 0.00) AS total_earned, COUNT(*) AS approved_sales
-             FROM unlock_sales WHERE status = 'approved'"
+             FROM unlock_sales
+             WHERE status = 'approved' AND is_employee_credited = 1
+               AND emergency_assignment_id IS NULL"
         )->fetch(PDO::FETCH_ASSOC);
 
         return [

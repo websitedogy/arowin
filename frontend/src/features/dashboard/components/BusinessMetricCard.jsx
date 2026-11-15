@@ -1,7 +1,8 @@
 import Icon from './Icon'
 
 export default function BusinessMetricCard({ label, icon, tone, value = '—', status = 'Not tracked yet', onClick }) {
-  const hasValue = value !== '—' && value !== ''
+  const hasValue = value !== '—' && value !== '' && value !== null && value !== undefined
+  const accessibleValue = typeof value === 'number' ? `, ${value} records` : ''
   const content = (
     <>
       <span className="business-metric-icon"><Icon name={icon} size={20} /></span>
@@ -19,7 +20,7 @@ export default function BusinessMetricCard({ label, icon, tone, value = '—', s
         type="button"
         className={`business-metric-card ${tone} workspace-feature-card`}
         onClick={onClick}
-        aria-label={`Open ${label}`}
+        aria-label={`Open ${label}${accessibleValue}`}
       >
         {content}
       </button>

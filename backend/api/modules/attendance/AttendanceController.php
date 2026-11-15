@@ -205,6 +205,49 @@ final class AttendanceController
         return $this->monthDetails($userId, $month, $salary, $joiningDate);
     }
 
+    public function subEditorMonthlyReport(string $month): array
+    {
+        if (preg_match('/^[0-9]{4}-(0[1-9]|1[0-2])$/', $month) !== 1) {
+            throw new InvalidArgumentException('Choose a valid attendance month.');
+        }
+
+        $monthStart = DateTimeImmutable::createFromFormat('!Y-m-d', $month . '-01', AppTime::timeZone());
+        if ($monthStart === false || $monthStart->format('Y-m') !== $month) {
+            throw new InvalidArgumentException('Choose a valid attendance month.');
+        }
+        $monthEnd = $monthStart->modify('last day of this month')->format('Y-m-d');
+
+        $statement = $this->database->prepare(
+            "SELECT employee.employee_id, employee.name, employee.role,
+                    record.attendance_date, record.check_in_at, record.check_out_at,
+                    record.late_deduction, record.on_time_bonus
+             FROM attendance_records AS record
+             INNER JOIN users AS employee ON employee.id = record.user_id
+             WHERE employee.role IN ('team_leader', 'telecaller')
+               AND record.attendance_date >= :month_start
+               AND record.attendance_date <= :month_end
+             ORDER BY record.attendance_date DESC, employee.name ASC"
+        );
+        $statement->execute([
+            'month_start' => $monthStart->format('Y-m-d'),
+            'month_end' => $monthEnd,
+        ]);
+
+        return [
+            'month' => $month,
+            'records' => array_map(static fn (array $row): array => [
+                'employeeId' => (string) $row['employee_id'],
+                'employeeName' => (string) $row['name'],
+                'role' => (string) $row['role'],
+                'date' => (string) $row['attendance_date'],
+                'checkedInAt' => (string) $row['check_in_at'],
+                'checkedOutAt' => $row['check_out_at'],
+                'lateDeduction' => (string) $row['late_deduction'],
+                'onTimeBonus' => (string) $row['on_time_bonus'],
+            ], $statement->fetchAll(PDO::FETCH_ASSOC)),
+        ];
+    }
+
     public function checkIn(int $userId, array $payload): array
     {
         $now = $this->now();

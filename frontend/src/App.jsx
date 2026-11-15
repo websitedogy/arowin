@@ -13,12 +13,17 @@ import EmployeeDirectoryPage from './features/employees/EmployeeDirectoryPage'
 import EmployeeKycPage from './features/employees/EmployeeKycPage'
 import BudgetDashboard from './features/budget/BudgetDashboard'
 import SalaryManagementPage from './features/budget/SalaryManagementPage'
-import OfficeLocationSetup from './features/attendance/OfficeLocationSetup'
+import AttendanceTrackingPage from './features/attendance/AttendanceTrackingPage'
+import AllLeadsPage from './features/sales/AllLeadsPage'
 import LeaveManagementPage from './features/leave/LeaveManagementPage'
 import DailyActivitiesPage from './features/activities/DailyActivitiesPage'
+import RewardsReportPage from './features/sales/RewardsReportPage'
+import PaidIncentivesPage from './features/sales/PaidIncentivesPage'
 import SalesReviewPage from './features/sales/SalesReviewPage'
+import EmergencySalesAssignPage from './features/sales/EmergencySalesAssignPage'
 import EarnedIncentivesPage from './features/sales/EarnedIncentivesPage'
 import SalesSummaryPage from './features/sales/SalesSummaryPage'
+import NotificationTriggersPage from './features/notifications/NotificationTriggersPage'
 import SettingsPage from './features/settings/SettingsPage'
 import SupportTicketsPage from './features/support/SupportTicketsPage'
 
@@ -87,14 +92,6 @@ function App() {
     setCurrentPath(path)
   }, [])
 
-  const goBack = useCallback((fallbackPath) => {
-    if (routeHistory.current.length > 0) {
-      window.history.back()
-      return
-    }
-    navigate(fallbackPath)
-  }, [navigate])
-
   const handleLogout = async () => {
     try {
       await apiRequest('/auth/logout', { method: 'POST' })
@@ -124,7 +121,7 @@ function App() {
       || (currentPath === '/staff' ? 'all' : null)
 
     return (
-      <SubEditorLayout user={user} onLogout={handleLogout} onNavigate={navigate} onBack={() => goBack('/')} currentPath={currentPath}>
+      <SubEditorLayout user={user} onLogout={handleLogout} onNavigate={navigate} currentPath={currentPath}>
         {(workspace) => {
           if (employeeFilter) {
             return (
@@ -154,7 +151,7 @@ function App() {
           }
 
           if (currentPath === '/attendance') {
-            return <OfficeLocationSetup />
+            return <AttendanceTrackingPage />
           }
 
           if (currentPath === '/leave-requests') {
@@ -169,12 +166,30 @@ function App() {
             return <DailyActivitiesPage user={user} />
           }
 
+          if (currentPath === '/leads') {
+            return <AllLeadsPage />
+          }
+
           if (currentPath.startsWith('/targets')) {
             return <TargetSetupPage currentPath={currentPath} onNavigate={navigate} />
           }
 
-          if (currentPath === '/sales/total') {
-            return <SalesReviewPage />
+          if (currentPath === '/sales/emergency/assign') {
+            return (
+              <EmergencySalesAssignPage
+                employees={workspace.employees}
+                isLoadingEmployees={workspace.isLoading}
+                onNavigate={navigate}
+              />
+            )
+          }
+
+          if (currentPath === '/sales/emergency') {
+            return <SalesReviewPage saleType="emergency" employees={workspace.employees} onNavigate={navigate} />
+          }
+
+          if (currentPath === '/sales/unlocks/review') {
+            return <SalesReviewPage saleType="regular" employees={workspace.employees} onNavigate={navigate} />
           }
 
           if (currentPath === '/incentives/packages') {
@@ -185,8 +200,20 @@ function App() {
             return <EarnedIncentivesPage />
           }
 
-          if (['/sales/weekly', '/sales/monthly'].includes(currentPath)) {
+          if (currentPath === '/incentives/paid') {
+            return <PaidIncentivesPage />
+          }
+
+          if (currentPath === '/notifications') {
+            return <NotificationTriggersPage />
+          }
+
+          if (['/sales/total', '/sales/weekly', '/sales/monthly'].includes(currentPath)) {
             return <SalesSummaryPage key={currentPath} feature={subEditorFeatureByPath[currentPath]} />
+          }
+
+          if (['/rewards/achieved', '/rewards/granted'].includes(currentPath)) {
+            return <RewardsReportPage key={currentPath} feature={subEditorFeatureByPath[currentPath]} />
           }
 
           if (subEditorFeatureByPath[currentPath]) {
@@ -212,7 +239,6 @@ function App() {
         user={user}
         onUserUpdate={setUser}
         onLogout={handleLogout}
-        onBack={() => goBack(user.role === 'team_leader' ? '/team-leader' : '/telecaller')}
         currentPath={currentPath}
         onNavigate={navigate}
       />

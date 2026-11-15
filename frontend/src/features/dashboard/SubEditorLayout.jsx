@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { apiRequest } from '../../api'
 import Icon from './components/Icon'
 import RoleProfileMenu from './components/RoleProfileMenu'
-import { subEditorFeatures } from './subEditorFeatures'
 
 const navigation = [
   { label: 'Dashboard', icon: 'home', path: '/' },
@@ -20,15 +19,15 @@ const navigationGroups = [
     label: 'Operations',
     items: [
       { label: 'Attendance Tracking', icon: 'clock', path: '/attendance' },
-      { label: 'Leave Requests', icon: 'calendar', path: '/leave-requests' },
       { label: 'Daily Activities', icon: 'file', path: '/daily-activities' },
-      { label: 'Support Tickets', icon: 'headset', path: '/support-tickets' },
     ],
   },
   {
     label: 'Sales & Incentives',
     items: [
       { label: 'Total Sales', icon: 'chart', path: '/sales/total' },
+      { label: 'Unlock Sales Review', icon: 'file', path: '/sales/unlocks/review' },
+      { label: 'Emergency Sales', icon: 'zap', path: '/sales/emergency' },
       { label: "This Week's Sales", icon: 'chart', path: '/sales/weekly' },
       { label: "Last Month's Sales", icon: 'chart', path: '/sales/monthly' },
       { label: 'Target Setup', icon: 'settings', path: '/targets' },
@@ -52,6 +51,7 @@ const navigationGroups = [
 function isNavigationActive(path, currentPath) {
   if (path === '/') return currentPath === '/'
   if (path === '/employees/all' || path === '/staff') return currentPath === path
+  if (path === '/sales/emergency') return currentPath === path || currentPath === '/sales/emergency/assign'
   if (path === '/reports') return currentPath === '/reports'
   if (path === '/settings') return currentPath === '/settings'
   return currentPath === path
@@ -64,17 +64,31 @@ function employeeRoute(employee) {
   return '/employees/all'
 }
 
-export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, currentPath, children }) {
+export default function SubEditorLayout({ user, onLogout, onNavigate, currentPath, children }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia('(max-width: 1024px)').matches)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const notificationRef = useRef(null)
   const [search, setSearch] = useState('')
   const [employees, setEmployees] = useState([])
   const [activities, setActivities] = useState([])
-  const [supportTickets, setSupportTickets] = useState([])
-  const [supportLoadError, setSupportLoadError] = useState('')
+  const [notifications, setNotifications] = useState([])
+  const [notificationLoadError, setNotificationLoadError] = useState('')
   const [dataLoadError, setDataLoadError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    if (!showNotifications) return undefined
+    const handleOutsideClick = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setShowNotifications(false)
+      }
+    }
+    document.addEventListener('pointerdown', handleOutsideClick)
+    return () => {
+      document.removeEventListener('pointerdown', handleOutsideClick)
+    }
+  }, [showNotifications])
 
   useEffect(() => {
     const compactViewport = window.matchMedia('(max-width: 1024px)')
@@ -99,16 +113,6 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
     }
   }, [sidebarCollapsed])
 
-  const loadSupportTickets = useCallback(async () => {
-    try {
-      const result = await apiRequest('/support/tickets')
-      setSupportTickets(result.tickets)
-      setSupportLoadError('')
-    } catch (error) {
-      setSupportLoadError(error.message)
-    }
-  }, [])
-
   useEffect(() => {
     let active = true
 
@@ -132,13 +136,26 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
   }, [])
 
   useEffect(() => {
-    const initialLoadTimer = window.setTimeout(loadSupportTickets, 0)
-    const refreshTimer = window.setInterval(loadSupportTickets, 30000)
+    let active = true
+    const loadNotifications = async () => {
+      try {
+        const result = await apiRequest('/notifications')
+        if (active) {
+          setNotifications(result.result.notifications)
+          setNotificationLoadError('')
+        }
+      } catch (error) {
+        if (active) setNotificationLoadError(error.message)
+      }
+    }
+
+    loadNotifications()
+    const refreshTimer = window.setInterval(loadNotifications, 30000)
     return () => {
-      window.clearTimeout(initialLoadTimer)
+      active = false
       window.clearInterval(refreshTimer)
     }
-  }, [loadSupportTickets])
+  }, [])
 
   const searchResults = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -149,13 +166,22 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
   }, [employees, search])
 
   const currentUserName = user?.name || 'Sub Editor User'
-  const currentPageTitle = currentPath === '/'
-    ? 'Dashboard'
-    : navigation.find((item) => item.path === currentPath)?.label
-      || subEditorFeatures.find((item) => item.path === currentPath || (item.path === '/targets' && currentPath.startsWith('/targets/')))?.label
-      || ({ '/employees/team-leaders': 'Team Leaders', '/employees/telecallers': 'Telecallers', '/employees/sub-editors': 'Sub Editors', '/employees/active': 'Active Employees', '/settings': 'Settings' })[currentPath]
-      || 'Workspace'
-  const ticketsNeedingAttention = supportTickets.filter((ticket) => ['open', 'in_progress'].includes(ticket.status))
+  const unreadNotificationCount = notifications.filter((notification) => !notification.isRead).length
+  const openNotification = async (notification) => {
+    try {
+      await apiRequest(`/notifications/${notification.eventKey}/${notification.entityId}/read`, { method: 'POST' })
+      setNotifications((current) => current.map((item) =>
+        item.eventKey === notification.eventKey && item.entityId === notification.entityId
+          ? { ...item, isRead: true }
+          : item,
+      ))
+      setNotificationLoadError('')
+      setShowNotifications(false)
+      onNavigate(notification.route)
+    } catch (error) {
+      setNotificationLoadError(error.message)
+    }
+  }
   const pageContent = children({
     employees,
     setEmployees,
@@ -204,11 +230,6 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
               >
                 <Icon name={item.icon} size={20} />
                 <span className="nav-label">{item.label}</span>
-                {item.path === '/support-tickets' && ticketsNeedingAttention.length > 0 && (
-                  <span className="support-nav-badge" aria-label={`${ticketsNeedingAttention.length} tickets need attention`}>
-                    {ticketsNeedingAttention.length > 99 ? '99+' : ticketsNeedingAttention.length}
-                  </span>
-                )}
               </button>
             )
           })}
@@ -232,11 +253,6 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
                   >
                     <Icon name={item.icon} size={20} />
                     <span className="nav-label">{item.label}</span>
-                    {item.path === '/support-tickets' && ticketsNeedingAttention.length > 0 && (
-                      <span className="support-nav-badge" aria-label={`${ticketsNeedingAttention.length} tickets need attention`}>
-                        {ticketsNeedingAttention.length > 99 ? '99+' : ticketsNeedingAttention.length}
-                      </span>
-                    )}
                   </button>
                 )
               })}
@@ -259,47 +275,41 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
             >
               <Icon name={sidebarCollapsed ? 'menu' : 'close'} size={20} />
             </button>
-            <div className="team-header-brand">
-              <span className="team-header-brand-mark">A</span>
-              <span><strong>AROWIN</strong><small>Sub Editor</small></span>
-            </div>
-            <span className="team-header-divider" />
-            <span className="team-header-page">{currentPageTitle}</span>
           </div>
-          <div className="topbar-tools">
-            <div className="search-wrap">
-              <Icon name="search" size={19} />
-              <input
-                type="search"
-                aria-label="Search employees and teams"
-                placeholder="Search employees, teams..."
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-              {search.trim() && (
-                <div className="search-results">
-                  {searchResults.length ? searchResults.map((employee) => (
-                    <button
-                      type="button"
-                      className="search-result"
-                      key={employee.id}
-                      onClick={() => {
-                        onNavigate(employeeRoute(employee))
-                        setSearch('')
-                      }}
-                    >
-                      <span className="search-result-avatar">{employee.fullName?.[0]?.toUpperCase() || 'E'}</span>
-                      <span><strong>{employee.fullName}</strong><small>{employee.role}</small></span>
-                    </button>
-                  )) : <p>No matching employees</p>}
-                </div>
-              )}
-            </div>
-            <div className="notification-wrap">
+          <div className="search-wrap">
+            <Icon name="search" size={19} />
+            <input
+              type="search"
+              aria-label="Search employees and teams"
+              placeholder="Search employees, teams..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            {search.trim() && (
+              <div className="search-results">
+                {searchResults.length ? searchResults.map((employee) => (
+                  <button
+                    type="button"
+                    className="search-result"
+                    key={employee.id}
+                    onClick={() => {
+                      onNavigate(employeeRoute(employee))
+                      setSearch('')
+                    }}
+                  >
+                    <span className="search-result-avatar">{employee.fullName?.[0]?.toUpperCase() || 'E'}</span>
+                    <span><strong>{employee.fullName}</strong><small>{employee.role}</small></span>
+                  </button>
+                )) : <p>No matching employees</p>}
+              </div>
+            )}
+          </div>
+          <div className="topbar-tools sub-editor-topbar-actions">
+            <div className="notification-wrap" ref={notificationRef}>
               <button
                 type="button"
-                className={`notification-button${activities.length || ticketsNeedingAttention.length ? ' has-notifications' : ''}`}
-                aria-label={`Notifications${ticketsNeedingAttention.length ? `, ${ticketsNeedingAttention.length} support tickets need attention` : ''}`}
+                className={`notification-button${unreadNotificationCount ? ' has-notifications' : ''}`}
+                aria-label={`Notifications${unreadNotificationCount ? `, ${unreadNotificationCount} unread` : ''}`}
                 aria-expanded={showNotifications}
                 onClick={() => {
                   setShowNotifications((value) => !value)
@@ -307,31 +317,28 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
                 }}
               >
                 <Icon name="bell" size={21} />
-                {(activities.length > 0 || ticketsNeedingAttention.length > 0) && <span className="notification-dot" />}
+                {unreadNotificationCount > 0 && <span className="notification-dot" />}
               </button>
               {showNotifications && (
-                <div className="notification-popover">
+                <div className="notification-popover" aria-label="Recent notifications">
                   <strong>Notifications</strong>
-                  {supportLoadError && <p className="support-notification-error" role="alert">{supportLoadError}</p>}
-                  {ticketsNeedingAttention.length > 0 && (
+                  {notificationLoadError && <p className="support-notification-error" role="alert">{notificationLoadError}</p>}
+                  {notifications.slice(0, 6).map((notification) => (
                     <button
                       type="button"
-                      className="support-notification-link"
-                      onClick={() => {
-                        setShowNotifications(false)
-                        onNavigate('/support-tickets')
-                      }}
+                      className={`support-notification-link${notification.isRead ? '' : ' is-unread'}`}
+                      key={`${notification.eventKey}-${notification.entityId}`}
+                      onClick={() => openNotification(notification)}
                     >
-                      <span className="support-notification-icon"><Icon name="headset" size={17} /></span>
+                      <span className="support-notification-icon"><Icon name="bell" size={17} /></span>
                       <span>
-                        <b>{ticketsNeedingAttention.length} support ticket{ticketsNeedingAttention.length === 1 ? '' : 's'} need attention</b>
-                        <small>Open the support inbox to respond</small>
+                        <b>{notification.title}</b>
+                        <small>{notification.message}</small>
                       </span>
                       <Icon name="chevron" size={16} />
                     </button>
-                  )}
-                  {activities.length > 0 && <p>{activities.length} employee update{activities.length === 1 ? '' : 's'} recorded.</p>}
-                  {!ticketsNeedingAttention.length && !activities.length && !supportLoadError && <p>You’re all caught up.</p>}
+                  ))}
+                  {!notifications.length && !notificationLoadError && <p>You’re all caught up.</p>}
                 </div>
               )}
             </div>
@@ -342,6 +349,8 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
               actionLabel="Settings"
               actionIcon="settings"
               actionPath="/settings"
+              leavePath="/leave-requests"
+              supportPath="/support-tickets"
               isOpen={showProfileMenu}
               onOpenChange={setShowProfileMenu}
               onOpen={() => setShowNotifications(false)}
@@ -351,10 +360,6 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, onBack, cu
           </div>
         </header>
 
-        <button type="button" className="team-content-back sub-editor-content-back" onClick={onBack}>
-          <Icon name="back" size={17} />
-          <span>Back</span>
-        </button>
         {dataLoadError && <p className="dashboard-data-error workspace-data-error" role="alert">{dataLoadError}</p>}
         {pageContent}
       </main>

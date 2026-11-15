@@ -132,6 +132,27 @@ final class AttendanceControllerTest extends TestCase
         $this->assertSame(250.0, $history['onTimeBonus']);
     }
 
+    public function testSubEditorMonthlyReportReturnsOnlyEmployeeRecordsWithinSelectedMonth(): void
+    {
+        $this->database->exec("INSERT INTO users (id, employee_id, name, role, is_active, email, password_hash)
+            VALUES (2, '234567', 'Telecaller', 'telecaller', 1, 'caller@example.com', 'hash')");
+        $this->database->exec("INSERT INTO attendance_records
+            (user_id, attendance_date, check_in_at, check_in_latitude, check_in_longitude,
+             check_in_distance_m, check_in_selfie, late_deduction, on_time_bonus, check_out_at)
+            VALUES
+            (1, '2025-01-03', '2025-01-03 09:00:00', 17.2589440, 80.1392630, 0, 'in.jpg', 0, 5, '2025-01-03 17:30:00'),
+            (2, '2025-02-01', '2025-02-01 09:00:00', 17.2589440, 80.1392630, 0, 'in.jpg', 0, 0, NULL)");
+
+        $report = (new AttendanceController($this->database))->subEditorMonthlyReport('2025-01');
+
+        self::assertSame('2025-01', $report['month']);
+        self::assertCount(1, $report['records']);
+        self::assertSame('123456', $report['records'][0]['employeeId']);
+        self::assertSame('team_leader', $report['records'][0]['role']);
+        self::assertSame('2025-01-03', $report['records'][0]['date']);
+        self::assertSame('5', (string) $report['records'][0]['onTimeBonus']);
+    }
+
     public function testAfterCutoffCheckInDoesNotEarnOnTimeBonus(): void
     {
         $now = $this->workdayMorning()->setTime(9, 31, 0);

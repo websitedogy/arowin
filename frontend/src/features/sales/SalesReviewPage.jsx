@@ -3,11 +3,16 @@ import { apiRequest } from '../../api'
 import formatDateTime from '../../utils/formatDateTime'
 import { formatUsdt } from '../../utils/formatters'
 
-const filters = [
-  { key: 'all', label: 'All Sales' },
-  { key: 'pending', label: 'Pending' },
-  { key: 'approved', label: 'Approved' },
-  { key: 'rejected', label: 'Rejected' },
+const emergencySections = [
+  { key: 'assign', label: 'Emergency Sales Assign', count: (summary, employees) => employees.length },
+  { key: 'pending', label: 'Pending Emergency Sales', count: (summary) => summary?.pendingCount },
+  { key: 'approved', label: 'Approved Emergency Sales', count: (summary) => summary?.approvedCount },
+  { key: 'rejected', label: 'Rejected Emergency Sales', count: (summary) => summary?.rejectedCount },
+]
+const unlockSections = [
+  { key: 'pending', label: 'Pending Unlock Sales', count: (summary) => summary?.pendingCount },
+  { key: 'approved', label: 'Approved Unlock Sales', count: (summary) => summary?.approvedCount },
+  { key: 'rejected', label: 'Rejected Unlock Sales', count: (summary) => summary?.rejectedCount },
 ]
 
 function displayDate(value) {
@@ -21,8 +26,11 @@ function displayDate(value) {
   }, { assumedOffset: '+05:30' })
 }
 
-export default function SalesReviewPage() {
+export default function SalesReviewPage({ saleType = 'regular', employees = [], onNavigate }) {
+  const isEmergency = saleType === 'emergency'
+  const sections = isEmergency ? emergencySections : unlockSections
   const [filter, setFilter] = useState('pending')
+  const [activeSection, setActiveSection] = useState('pending')
   const [result, setResult] = useState(null)
   const [rejectionSale, setRejectionSale] = useState(null)
   const [rejectionReason, setRejectionReason] = useState('')
@@ -34,7 +42,7 @@ export default function SalesReviewPage() {
     setError('')
     setIsLoading(true)
     try {
-      const response = await apiRequest(`/sales/unlocks?status=${activeFilter}`)
+      const response = await apiRequest(`/sales/unlocks?status=${activeFilter}&type=${saleType}`)
       setResult(response.result)
     } catch (requestError) {
       setError(requestError.message)
@@ -45,7 +53,7 @@ export default function SalesReviewPage() {
 
   useEffect(() => {
     let active = true
-    apiRequest(`/sales/unlocks?status=${filter}`)
+    apiRequest(`/sales/unlocks?status=${filter}&type=${saleType}`)
       .then((response) => {
         if (active) {
           setResult(response.result)
@@ -61,7 +69,7 @@ export default function SalesReviewPage() {
     return () => {
       active = false
     }
-  }, [filter])
+  }, [filter, saleType])
 
   const review = async (sale, decision, reason = '') => {
     setReviewingId(sale.id)
@@ -88,60 +96,52 @@ export default function SalesReviewPage() {
   }
 
   const summary = result?.summary
+  const assignableEmployees = employees.filter((employee) =>
+    employee.status === 'Active' && ['team_leader', 'telecaller'].includes(employee.roleKey),
+  )
 
   return (
     <section className="sub-editor-feature-page sales-review-page">
       <span className="mini-label">Sub Editor Workspace</span>
-      <h1>Total Sales</h1>
+      <h1>{isEmergency ? 'Emergency Sales' : 'Unlock Sales Review'}</h1>
       <p className="sub-editor-feature-description">
-        Review Telecaller and Team Leader package sale requests. Only approved sales count toward Total Sales and earn incentives.
+        {isEmergency
+          ? 'Assign emergency sales amounts to Team Leaders and Telecallers, set an expiry date, and review emergency sale submissions.'
+          : 'Review regular unlock sales submitted by Team Leaders and Telecallers.'}
       </p>
 
       {error && <p className="dashboard-data-error" role="alert">{error}</p>}
 
-      <div className="sales-summary-stats">
-        <article className="dashboard-panel sales-summary-stat">
-          <span>Approved Sales</span>
-          <strong>{isLoading && !summary ? 'Loading…' : formatUsdt(summary?.approvedAmount || '0')}</strong>
-        </article>
-        <article className="dashboard-panel sales-summary-stat">
-          <span>Pending Sales</span>
-          <strong>{isLoading && !summary ? 'Loading…' : formatUsdt(summary?.pendingAmount || '0')}</strong>
-        </article>
-        <article className="dashboard-panel sales-summary-stat">
-          <span>Pending Reviews</span>
-          <strong>{isLoading && !summary ? '—' : summary?.pendingCount ?? 0}</strong>
-        </article>
+      <div className="emergency-section-cards" role="group" aria-label="Emergency sales sections">
+        {sections.map((section) => (
+          <button
+            type="button"
+            aria-pressed={activeSection === section.key}
+            className={`emergency-section-card${activeSection === section.key ? ' is-active' : ''}`}
+            key={section.key}
+            onClick={() => {
+              if (section.key === 'assign') {
+                onNavigate('/sales/emergency/assign')
+                return
+              }
+              setActiveSection(section.key)
+              if (section.key !== filter) {
+                setIsLoading(true)
+                setFilter(section.key)
+              }
+            }}
+          >
+            <span>{section.label}</span>
+            <strong>{section.count(summary, assignableEmployees)}</strong>
+          </button>
+        ))}
       </div>
 
       <article className="dashboard-panel sales-review-panel">
-        <div className="daily-activity-filters daily-activity-review-tabs" role="tablist" aria-label="Filter sales by status">
-          {filters.map((item) => {
-            const count = item.key === 'pending'
-              ? summary?.pendingCount
-              : item.key === 'approved'
-                ? summary?.approvedCount
-                : item.key === 'rejected'
-                  ? summary?.rejectedCount
-                  : summary?.totalCount
-            return (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={filter === item.key}
-                className={filter === item.key ? 'is-active' : ''}
-                key={item.key}
-                onClick={() => {
-                  setIsLoading(true)
-                  setFilter(item.key)
-                }}
-              >
-                {item.label}{count === undefined ? '' : ` (${count})`}
-              </button>
-            )
-          })}
+        <div className="panel-title emergency-sales-list-heading">
+          <h2>{sections.find((section) => section.key === activeSection)?.label}</h2>
+          <span className="unlock-sales-record-count">{result?.sales?.length ?? 0} records</span>
         </div>
-
         <div className="employee-table-wrap">
           <table className="employee-table sales-review-table">
             <thead>
@@ -150,6 +150,7 @@ export default function SalesReviewPage() {
                 <th>Submitted By</th>
                 <th>Customer Reference</th>
                 <th>Package</th>
+                <th>Sale Type</th>
                 <th>Status</th>
                 <th>Incentive</th>
                 {filter !== 'approved' && filter !== 'rejected' && <th>Review</th>}
@@ -158,7 +159,7 @@ export default function SalesReviewPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={filter === 'approved' ? 6 : 7} className="sub-editor-feature-empty">Loading sales requests…</td></tr>
+                <tr><td colSpan={filter === 'approved' ? 7 : 8} className="sub-editor-feature-empty">Loading sales requests…</td></tr>
               ) : result?.sales.length ? (
                 result.sales.map((sale) => (
                   <tr key={sale.id}>
@@ -166,7 +167,13 @@ export default function SalesReviewPage() {
                     <td>{sale.employeeName}<small className="sales-review-employee-id">{sale.employeeRole === 'team_leader' ? 'Team Leader' : 'Telecaller'} · {sale.employeeId}</small></td>
                     <td>{sale.customerReference}</td>
                     <td>{formatUsdt(sale.packageAmount)}</td>
-                    <td><span className={`sales-status-badge is-${sale.status}`}>{sale.status}</span></td>
+                    <td>{sale.emergencyAssignmentId ? 'Emergency' : 'Regular'}</td>
+                    <td>
+                      <span className={`sales-status-badge is-${sale.status}`}>{sale.status}</span>
+                      {!sale.isEmployeeCredited && (
+                        <small className="sales-review-employee-id">No employee sales or incentive credit</small>
+                      )}
+                    </td>
                     <td>{sale.incentiveAmount === null ? '—' : formatUsdt(sale.incentiveAmount)}</td>
                     {filter !== 'approved' && filter !== 'rejected' && (
                       <td>
@@ -200,7 +207,7 @@ export default function SalesReviewPage() {
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan={filter === 'approved' ? 6 : 7} className="sub-editor-feature-empty">No {filter === 'all' ? '' : `${filter} `}sales requests.</td></tr>
+                <tr><td colSpan={filter === 'approved' ? 7 : 8} className="sub-editor-feature-empty">No {filter === 'all' ? '' : `${filter} `}sales requests.</td></tr>
               )}
             </tbody>
           </table>

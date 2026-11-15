@@ -39,7 +39,7 @@ function getCurrentPosition() {
   })
 }
 
-export default function AttendancePanel({ compact = false }) {
+export default function AttendancePanel({ compact = false, heading = 'Attendance & Salary', subtitle = 'Check-in: 12:00 AM–10:30 AM · Check-out: 5:30 PM · IST' }) {
   const [attendance, setAttendance] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -152,7 +152,7 @@ export default function AttendancePanel({ compact = false }) {
       <div className="attendance-panel-heading">
         <div className="attendance-panel-title">
           <span className="attendance-panel-icon"><Icon name="calendar" size={21} /></span>
-          <div><h2>Attendance & Salary</h2><p>Check-in: 12:00 AM–10:30 AM · Check-out: 5:30 PM · IST</p></div>
+          <div><h2>{heading}</h2><p>{subtitle}</p></div>
         </div>
         {attendance?.today?.checkedInAt && (
           <span className={`attendance-state${checkedOut ? ' is-complete' : ''}`}>
@@ -194,10 +194,7 @@ export default function AttendancePanel({ compact = false }) {
           <div className="attendance-salary-scales">
             <div><span>Monthly salary</span><strong>{attendance.monthlySalary === null ? 'Not set' : currency(attendance.monthlySalary)}</strong></div>
             <div><span>Earned this month</span><strong>{attendance.earned === null ? 'Not set' : currency(attendance.earned)}</strong></div>
-            <div><span>Daily activity bonus</span><strong>{currency(attendance.activityBonus)}</strong></div>
-            <div><span>On-time bonus</span><strong>{currency(attendance.onTimeBonus ?? 0)}</strong></div>
-            <div><span>Approved leave cut-off</span><strong>{attendance.leaveDeductions === null ? 'Not set' : currency(attendance.leaveDeductions)}</strong></div>
-            <div><span>Cut-off · after late deductions</span><strong>{attendance.remainingPayable === null ? 'Not set' : currency(attendance.remainingPayable)}</strong></div>
+            <div><span>Cut-offs</span><strong>{currency((attendance.leaveDeductions ?? 0) + (attendance.lateDeductions ?? 0))}</strong></div>
           </div>
           <div
             className="attendance-progress-track"

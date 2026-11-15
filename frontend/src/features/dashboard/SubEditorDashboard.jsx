@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { apiRequest } from '../../api'
+import formatDateTime from '../../utils/formatDateTime'
+import { formatUsdt } from '../../utils/formatters'
 import CreateEmployeeModal from '../employees/CreateEmployeeModal'
 import DashboardSectionHeading from './components/DashboardSectionHeading'
 import Icon from './components/Icon'
@@ -7,94 +9,84 @@ import BusinessMetricCard from './components/BusinessMetricCard'
 import { subEditorFeatures } from './subEditorFeatures'
 import { isManagedEmployee } from '../employees/employeeData'
 
-function TrendChart({ range, employees }) {
-  const [today, setToday] = useState(() => {
-    const date = new Date()
-    date.setHours(0, 0, 0, 0)
-    return date
-  })
-  const dayCount = Number(range)
-  const start = new Date(today)
-  start.setDate(start.getDate() - dayCount + 1)
-
-  useEffect(() => {
-    const now = new Date()
-    const nextDay = new Date(now)
-    nextDay.setHours(24, 0, 0, 0)
-    const timer = setTimeout(() => {
-      const date = new Date()
-      date.setHours(0, 0, 0, 0)
-      setToday(date)
-    }, nextDay.getTime() - now.getTime())
-
-    return () => clearTimeout(timer)
-  }, [today])
-
-  const startDay = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()) / 86400000
-  const counts = Array(dayCount).fill(0)
-  employees.forEach((employee) => {
-    if (employee.roleKey === 'sub_editor' || employee.role === 'Sub Editor' || !employee.createdAt) return
-
-    const datePart = String(employee.createdAt).slice(0, 10)
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart)
-    if (!match) return
-
-    const createdDay = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) / 86400000
-    const index = createdDay - startDay
-    if (index >= 0 && index < dayCount) counts[index] += 1
-  })
+function SalesOverviewChart({ summary }) {
+  const salesByDay = new Map((summary?.dailySales || []).map((sale) => [sale.date, Number(sale.amount)]))
+  const [year, month, day] = (summary?.startDate || '').split('-').map(Number)
+  const weekStart = summary?.startDate ? new Date(year, month - 1, day) : null
+  const days = weekStart
+    ? Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(weekStart)
+      date.setDate(date.getDate() + index)
+      const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+      return {
+        date,
+        label: new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(date),
+        amount: salesByDay.get(dateKey) || 0,
+      }
+    })
+    : []
 
   const width = 640
   const height = 190
   const padding = { top: 12, right: 12, bottom: 30, left: 36 }
   const chartWidth = width - padding.left - padding.right
   const chartHeight = height - padding.top - padding.bottom
-  const maxCount = Math.max(...counts)
-  const tickStep = Math.max(1, Math.ceil(maxCount / 4))
+  const maximum = Math.max(...days.map((item) => item.amount), 0)
+  const tickStep = Math.max(1, Math.ceil(maximum / 4))
   const maxValue = tickStep * 4
-  const points = counts.map((count, index) => ({
-    count,
-    x: padding.left + (dayCount === 1 ? chartWidth / 2 : (index / (dayCount - 1)) * chartWidth),
-    y: padding.top + chartHeight - (count / maxValue) * chartHeight,
-    date: new Date(start.getFullYear(), start.getMonth(), start.getDate() + index),
+  const slotWidth = chartWidth / Math.max(days.length, 1)
+  const points = days.map((item, index) => ({
+    ...item,
+    x: padding.left + slotWidth * index + slotWidth / 2,
+    y: padding.top + chartHeight - (item.amount / maxValue) * chartHeight,
   }))
-  const tickIndexes = [...new Set([0, 1, 2, 3, 4].map((tick) => Math.round((tick * (dayCount - 1)) / 4)))]
-  const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
-  const plottedPoints = points.map((point) => `${point.x},${point.y}`).join(' ')
-  const totalCreated = counts.reduce((total, count) => total + count, 0)
+  const linePoints = points.map((point) => `${point.x},${point.y}`).join(' ')
+  const areaPoints = points.length
+    ? `${points[0].x},${padding.top + chartHeight} ${linePoints} ${points[points.length - 1].x},${padding.top + chartHeight}`
+    : ''
+  const totalSales = days.reduce((total, item) => total + item.amount, 0)
 
   return (
-    <div className="trend-chart">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label={`Employee creation trend for the last ${dayCount} days: ${totalCreated} employees created`}
-      >
-        <title>Employee accounts created per day</title>
-        {[0, 1, 2, 3, 4].map((tick) => {
-          const value = maxValue - tick * tickStep
-          const y = padding.top + (tick / 4) * chartHeight
-          return (
-            <g key={value}>
-            <text className="trend-axis-label" x={padding.left - 8} y={y + 4} textAnchor="end">{value}</text>
+    <div className="sales-overview-chart">
+      {days.length ? (
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label={`Approved sales this week: ${formatUsdt(totalSales)}`}
+        >
+          <title>Approved sales by day this week</title>
+          <defs>
+            <linearGradient id="sales-overview-area" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#1682f4" stopOpacity=".3" />
+              <stop offset="100%" stopColor="#1682f4" stopOpacity=".02" />
+            </linearGradient>
+          </defs>
+          {[0, 1, 2, 3, 4].map((tick) => {
+            const value = maxValue - tick * tickStep
+            const y = padding.top + (tick / 4) * chartHeight
+            return (
+              <g key={value}>
+                <line className="sales-overview-gridline" x1={padding.left} x2={width - padding.right} y1={y} y2={y} />
+                <text className="sales-overview-axis-label" x={padding.left - 8} y={y + 4} textAnchor="end">{value}</text>
+              </g>
+            )
+          })}
+          {points.length > 1 && <polygon className="sales-overview-area" points={areaPoints} />}
+          <polyline className="sales-overview-line" points={linePoints} />
+          {points.map((point) => (
+            <g key={point.date.toISOString()}>
+              <circle className="sales-overview-point" cx={point.x} cy={point.y} r="4">
+                <title>{`${point.label}: ${formatUsdt(point.amount)}`}</title>
+              </circle>
+              <text className="sales-overview-axis-label" x={point.x} y={height - 7} textAnchor="middle">
+                {point.label}
+              </text>
             </g>
-          )
-        })}
-        <polyline className="trend-line" points={plottedPoints} />
-        {points.map((point) => (
-          <circle className="trend-point" key={point.date.toISOString()} cx={point.x} cy={point.y} r={dayCount === 7 ? 3 : 1.8}>
-            <title>{`${dateFormatter.format(point.date)}: ${point.count} employee${point.count === 1 ? '' : 's'}`}</title>
-          </circle>
-        ))}
-        {tickIndexes.map((index) => {
-          const point = points[index]
-          return (
-            <text className="trend-axis-label" key={point.date.toISOString()} x={point.x} y={height - 7} textAnchor="middle">
-              {dateFormatter.format(point.date)}
-            </text>
-          )
-        })}
-      </svg>
+          ))}
+        </svg>
+      ) : (
+        <p className="sales-overview-empty">Loading weekly sales…</p>
+      )}
     </div>
   )
 }
@@ -104,15 +96,58 @@ export default function SubEditorDashboard({
   currentPath,
   employees,
   setEmployees,
+  activities,
   setActivities,
   setDataLoadError,
+  isLoading,
 }) {
   const [showEmployeeModal, setShowEmployeeModal] = useState(false)
   const [deliveryNotice, setDeliveryNotice] = useState(null)
   const [isResendingCredentials, setIsResendingCredentials] = useState(false)
-  const [chartRange, setChartRange] = useState('30')
   const [employeeRole, setEmployeeRole] = useState('Team Leader')
+  const [featureCounts, setFeatureCounts] = useState(null)
+  const [featureCountsError, setFeatureCountsError] = useState('')
+  const [salesSummary, setSalesSummary] = useState(null)
+  const [salesSummaryError, setSalesSummaryError] = useState('')
+  const [isLoadingSalesSummary, setIsLoadingSalesSummary] = useState(true)
   const chartRef = useRef(null)
+
+  useEffect(() => {
+    let active = true
+    apiRequest('/dashboard/summary')
+      .then((result) => {
+        if (!active) return
+        if (!result.dashboard.featureCounts) {
+          throw new Error('Dashboard feature counts were not returned.')
+        }
+        setFeatureCounts(result.dashboard.featureCounts)
+      })
+      .catch((error) => {
+        if (active) setFeatureCountsError(error.message)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    apiRequest('/sales/summary?period=this_week')
+      .then((result) => {
+        if (active) setSalesSummary(result.summary)
+      })
+      .catch((error) => {
+        if (active) setSalesSummaryError(error.message)
+      })
+      .finally(() => {
+        if (active) setIsLoadingSalesSummary(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     if (currentPath === '/reports') {
@@ -123,37 +158,23 @@ export default function SubEditorDashboard({
   const employeeSummary = useMemo(() => {
     const employeeRecords = employees.filter(isManagedEmployee)
     const countRole = (role) => employeeRecords.filter((item) => item.role === role).length
-    const leaders = employeeRecords.filter((item) => item.role === 'Team Leader').length
-    const telecallers = employeeRecords.filter((item) => item.role === 'Telecaller').length
     return {
       summary: [
+        { label: 'Emergency Sales', value: 'Open', tone: 'emergency', icon: 'zap', path: '/sales/emergency', highlightLabel: true },
         { label: 'Budget', value: 'Open', tone: 'budget', icon: 'coins', path: '/budget', highlightLabel: true },
         { label: 'All Employees', value: employeeRecords.length, tone: 'employees', icon: 'users', filter: 'all' },
         { label: 'Team Leaders', value: countRole('Team Leader'), tone: 'leaders', icon: 'crown', filter: 'team-leaders' },
         { label: 'Telecallers', value: countRole('Telecaller'), tone: 'telecallers', icon: 'headset', filter: 'telecallers' },
         { label: 'Active Staff', value: employeeRecords.filter((item) => item.status === 'Active').length, tone: 'active', icon: 'users', filter: 'active' },
       ],
-      breakdown: [
-        { label: 'Team Leaders', value: leaders, tone: 'blue' },
-        { label: 'Telecallers', value: telecallers, tone: 'orange' },
-        { label: 'Others', value: employeeRecords.length - leaders - telecallers, tone: 'slate' },
-      ],
-      employeeCount: employeeRecords.length,
     }
   }, [employees])
 
-  const { summary, breakdown: employeeBreakdown, employeeCount } = employeeSummary
-  const breakdownTotal = employeeBreakdown.reduce((total, item) => total + item.value, 0)
-  let donutStart = 0
-  const donutBackground = breakdownTotal
-    ? `conic-gradient(${employeeBreakdown.map((item, index) => {
-      const colors = ['#0878f9', '#ff8a00', '#8052ff', '#94a3b8']
-      const end = donutStart + (item.value / breakdownTotal) * 100
-      const slice = `${colors[index]} ${donutStart}% ${end}%`
-      donutStart = end
-      return slice
-    }).join(', ')})`
-    : undefined
+  const { summary } = employeeSummary
+  const [greeting] = useState(() => {
+    const hour = new Date().getHours()
+    return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  })
 
   const openEmployeeModal = (role = 'Team Leader') => {
     setEmployeeRole(role)
@@ -211,19 +232,19 @@ export default function SubEditorDashboard({
   return (
     <>
       <section className="dashboard-content">
-            <header className="page-heading">
-              <div className="page-heading-copy">
-                <span className="mini-label">Overview</span>
-                <h1>Sub Editor Dashboard</h1>
-                <p>Manage employees, teams and telecaller activities</p>
-              </div>
-              <div className="page-heading-actions">
-                <button type="button" className="create-btn" onClick={() => openEmployeeModal()}>
-                  <Icon name="plus" size={19} />
-                  Create Employee ID
-                </button>
-              </div>
-            </header>
+        <header className="page-heading sub-editor-hero">
+          <div className="page-heading-copy">
+            <span className="mini-label">{greeting} <span aria-hidden="true">👋</span></span>
+            <h1>Sub Editor <span>Dashboard</span></h1>
+            <p>Manage employees, teams and telecaller activities efficiently.</p>
+          </div>
+          <div className="page-heading-actions">
+            <button type="button" className="create-btn" onClick={() => openEmployeeModal()}>
+              <Icon name="plus" size={19} />
+              Create Employee ID
+            </button>
+          </div>
+        </header>
 
             {deliveryNotice && (
               <div className={`dashboard-delivery-notice${deliveryNotice.sent ? ' is-sent' : ' is-failed'}`} role={deliveryNotice.sent ? 'status' : 'alert'}>
@@ -259,9 +280,10 @@ export default function SubEditorDashboard({
               <DashboardSectionHeading
                 eyebrow="Workspace"
                 title="Sub Editor Features"
-                description="Open a feature to view its records."
+                description="Track key activity and open a feature for details."
                 id="business-overview-title"
               />
+              {featureCountsError && <p className="dashboard-data-error" role="alert">Feature counts could not be loaded: {featureCountsError}</p>}
               <div className="business-metrics-grid">
                 {subEditorFeatures.map((feature) => (
                   <BusinessMetricCard
@@ -269,7 +291,7 @@ export default function SubEditorDashboard({
                     label={feature.label}
                     icon={feature.icon}
                     tone={feature.tone}
-                    value="—"
+                    value={featureCounts?.[feature.countKey] ?? '—'}
                     status={feature.status}
                     onClick={() => onNavigate(feature.path)}
                   />
@@ -277,43 +299,66 @@ export default function SubEditorDashboard({
               </div>
             </section>
 
-            <section className="analytics-grid">
-              <article className="dashboard-panel overview-panel">
-                <div className="panel-title">
-                  <Icon name="users" size={23} />
-                  <h2>Employee Overview</h2>
-                </div>
-                <div className="overview-content">
-                  <div className="donut-chart" style={{ background: donutBackground }}>
-                    <div className="donut-center">
-                      <strong>{employeeCount}</strong>
-                      <span>Total</span>
-                    </div>
-                  </div>
-                  <ul className="overview-legend">
-                    {employeeBreakdown.map((item) => (
-                      <li key={item.label}>
-                        <span className={`legend-dot ${item.tone}`} />
-                        <span className="legend-name">{item.label}</span>
-                        <strong>{item.value}</strong>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </article>
+        <section className="analytics-grid sub-editor-dashboard-bottom">
+          <article className="dashboard-panel sales-overview-panel" ref={chartRef}>
+            <div className="sub-editor-panel-heading">
+              <div className="panel-title">
+                <Icon name="chart" size={22} />
+                <h2>Sales Overview</h2>
+              </div>
+              <span className="sub-editor-period-label">This Week</span>
+            </div>
+            {salesSummaryError && <p className="dashboard-data-error" role="alert">Sales overview could not be loaded: {salesSummaryError}</p>}
+            {isLoadingSalesSummary ? (
+              <p className="sales-overview-empty" role="status">Loading weekly sales…</p>
+            ) : salesSummaryError ? (
+              <p className="sales-overview-empty">Sales data is unavailable.</p>
+            ) : (
+              <>
+                <p className="sales-overview-total">
+                  {formatUsdt(salesSummary?.totalSales || 0)} <span>approved this week</span>
+                </p>
+                <SalesOverviewChart summary={salesSummary} />
+              </>
+            )}
+          </article>
 
-              <article className="dashboard-panel trend-panel" ref={chartRef}>
-                <div className="panel-title trend-title">
-                  <div><Icon name="chart" size={22} /><h2>Employee Trend</h2></div>
-                  <select aria-label="Employee trend period" value={chartRange} onChange={(event) => setChartRange(event.target.value)}>
-                    <option value="7">Last 7 Days</option>
-                    <option value="30">Last 30 Days</option>
-                    <option value="90">Last 90 Days</option>
-                  </select>
-                </div>
-                <TrendChart range={chartRange} employees={employees} />
-              </article>
-            </section>
+          <article className="dashboard-panel recent-activities-panel">
+            <div className="sub-editor-panel-heading">
+              <div className="panel-title">
+                <Icon name="clock" size={21} />
+                <h2>Recent Activities</h2>
+              </div>
+              <button type="button" className="recent-activities-link" onClick={() => onNavigate('/employees/all')}>
+                View employees <Icon name="arrow" size={14} />
+              </button>
+            </div>
+            {isLoading ? (
+              <p className="recent-activities-empty" role="status">Loading recent activity…</p>
+            ) : activities?.length ? (
+              <ul className="recent-activities-list">
+                {activities.slice(0, 5).map((activity) => (
+                  <li key={activity.id}>
+                    <span className="recent-activity-icon"><Icon name="users" size={17} /></span>
+                    <span className="recent-activity-copy">
+                      <strong>{activity.name} added</strong>
+                      <small>{activity.role} · New employee account</small>
+                    </span>
+                    <time dateTime={`${String(activity.time).replace(' ', 'T')}+05:30`}>{formatDateTime(activity.time, undefined, {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      timeZone: 'Asia/Kolkata',
+                    }, { assumedOffset: '+05:30' })}</time>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="recent-activities-empty">No recent employee activity yet.</p>
+            )}
+          </article>
+        </section>
 
       </section>
       <CreateEmployeeModal

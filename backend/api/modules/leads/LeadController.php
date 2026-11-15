@@ -33,6 +33,30 @@ final class LeadController
         ], $statement->fetchAll(PDO::FETCH_ASSOC));
     }
 
+    public function listAllForSubEditor(): array
+    {
+        $statement = $this->database->query(
+            "SELECT lead.id, lead.customer_name, lead.mobile_number, lead.district, lead.note, lead.created_at,
+                    employee.employee_id, employee.name AS employee_name
+             FROM telecaller_leads AS lead
+             INNER JOIN users AS employee
+               ON employee.id = lead.telecaller_id AND employee.role = 'telecaller'
+             ORDER BY lead.created_at DESC, lead.id DESC
+             LIMIT 1000"
+        );
+
+        return array_map(static fn (array $row): array => [
+            'id' => (int) $row['id'],
+            'customerName' => (string) $row['customer_name'],
+            'mobileNumber' => (string) $row['mobile_number'],
+            'district' => (string) $row['district'],
+            'note' => (string) $row['note'],
+            'createdAt' => (string) $row['created_at'],
+            'employeeId' => (string) $row['employee_id'],
+            'employeeName' => (string) $row['employee_name'],
+        ], $statement->fetchAll(PDO::FETCH_ASSOC));
+    }
+
     public function create(int $telecallerId, array $payload): array
     {
         $customerName = trim((string) ($payload['customerName'] ?? ''));

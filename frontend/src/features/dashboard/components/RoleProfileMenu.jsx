@@ -8,6 +8,8 @@ export default function RoleProfileMenu({
   actionLabel,
   actionIcon,
   actionPath,
+  leavePath,
+  supportPath,
   isOpen,
   onOpenChange,
   onNavigate,
@@ -61,6 +63,30 @@ export default function RoleProfileMenu({
             <Icon name={actionIcon} size={17} />
             <span>{actionLabel}</span>
           </button>
+          {leavePath && (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenChange(false)
+                onNavigate(leavePath)
+              }}
+            >
+              <Icon name="calendar" size={17} />
+              <span>Leave Requests</span>
+            </button>
+          )}
+          {supportPath && (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenChange(false)
+                onNavigate(supportPath)
+              }}
+            >
+              <Icon name="headset" size={17} />
+              <span>Support Tickets</span>
+            </button>
+          )}
           <button
             type="button"
             className="role-profile-signout"

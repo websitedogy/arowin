@@ -4,7 +4,17 @@ import { formatMonth, formatUsdt } from '../../utils/formatters'
 import Icon from './components/Icon'
 import RoleProfileMenu from './components/RoleProfileMenu'
 import formatDashboardDate from './formatDashboardDate'
+import formatDateTime from '../../utils/formatDateTime'
 import AttendancePanel from '../attendance/AttendancePanel'
+
+const formatTime = (dateTime) => {
+  if (!dateTime) return '—'
+  return formatDateTime(dateTime, 'en-IN', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'Asia/Kolkata',
+  }, { fallback: '—', assumedOffset: '+05:30' })
+}
 import SalesTrendPanel from '../sales/SalesTrendPanel'
 import UnlockSalesPage from '../sales/UnlockSalesPage'
 import MyIncentivesPage from '../sales/MyIncentivesPage'
@@ -16,6 +26,9 @@ import LeaveManagementPage from '../leave/LeaveManagementPage'
 import DailyActivitiesPage from '../activities/DailyActivitiesPage'
 import SupportTicketsPage from '../support/SupportTicketsPage'
 import EmployeeKycPage from '../employees/EmployeeKycPage'
+import EmployeeIncomePage from './EmployeeIncomePage'
+import EmergencySalesPage from '../sales/EmergencySalesPage'
+import './dashboard-2027.css'
 
 const teamLeaderNavigationGroups = [
   {
@@ -26,12 +39,10 @@ const teamLeaderNavigationGroups = [
   {
     label: 'My Work',
     items: [
-      { label: 'Profile', path: '/team-leader/profile', icon: 'user', title: 'Profile', description: 'Your account details.' },
       { label: 'Employee KYC', path: '/team-leader/kyc', icon: 'file', title: 'Employee KYC', description: 'Submit your profile, bank, and identity details securely.' },
       { label: 'Attendance', path: '/team-leader/attendance', icon: 'calendar', title: 'Attendance', description: 'View your salary, attendance, and calendar history.' },
-      { label: 'Leave', path: '/team-leader/leave', icon: 'calendar', title: 'Leave', description: 'Apply for leave and review your request status.' },
+      { label: 'My Income', path: '/team-leader/income', icon: 'wallet', title: 'My Income', description: 'Review your complete compensation, salary, incentives, and payroll details.' },
       { label: 'Daily Activities', path: '/team-leader/daily-activities', icon: 'file', title: 'Daily Activities', description: 'Submit platform activity screenshots and check their verification status.' },
-      { label: 'Support', path: '/team-leader/support', icon: 'headset', title: 'Support Center' },
     ],
   },
   {
@@ -46,6 +57,7 @@ const teamLeaderNavigationGroups = [
     label: 'Sales & Rewards',
     items: [
       { label: 'My Unlock Sales', path: '/team-leader/sales', icon: 'trend', title: 'My Unlock Sales', description: 'Submit your own package sales for Sub Editor review and track their status.' },
+      { label: 'Emergency Sales', path: '/team-leader/emergency-sales', icon: 'zap', title: 'Emergency Sales', description: 'View emergency sales amounts assigned to you.' },
       { label: 'My Incentives', path: '/team-leader/incentives', icon: 'gift', title: 'My Incentives', description: 'View incentives earned from your approved package sales.' },
       { label: 'Team Incentives', path: '/team-leader/team-incentives', icon: 'gift', title: 'Team Incentives', description: 'View package-sale incentives earned by your assigned Telecallers.' },
       { label: 'Team Grant Incentives', path: '/team-leader/team-grant-incentives', icon: 'coins', title: 'Team Grant Incentives', description: 'See each Telecaller’s equal monthly target and your incentive share when everyone reaches their target.' },
@@ -55,12 +67,11 @@ const teamLeaderNavigationGroups = [
   },
 ]
 
-const teamLeaderPages = teamLeaderNavigationGroups.flatMap((group) => group.items)
-
-const telecallerSections = [
-  { label: 'My Unlock Sales', value: '—', icon: 'trend', tone: 'blue', note: 'Sales tracking is not configured' },
-  { label: 'My Incentives', value: '—', icon: 'gift', tone: 'green', note: 'Approved sale incentives' },
-  { label: 'Our Team Achievers', value: '—', icon: 'trophy', tone: 'purple', note: 'Approved teammate sale achievements' },
+const teamLeaderPages = [
+  ...teamLeaderNavigationGroups.flatMap((group) => group.items),
+  { label: 'Support', path: '/team-leader/support', icon: 'headset', title: 'Support Helpdesk', description: 'Submit and track support tickets with the management team.' },
+  { label: 'Profile', path: '/team-leader/profile', icon: 'user', title: 'My Profile', description: 'View and update your personal details and credentials.' },
+  { label: 'Leave', path: '/team-leader/leave', icon: 'calendar', title: 'Leave Management', description: 'Apply for leave and review your leave requests.' },
 ]
 
 const telecallerNavigationGroups = [
@@ -72,18 +83,17 @@ const telecallerNavigationGroups = [
   {
     label: 'My Work',
     items: [
-      { label: 'Profile', path: '/telecaller/profile', icon: 'user', available: true },
       { label: 'Employee KYC', path: '/telecaller/kyc', icon: 'file', available: true },
       { label: 'My Attendance', path: '/telecaller/attendance', icon: 'calendar', available: true },
-      { label: 'Leave', path: '/telecaller/leave', icon: 'calendar', available: true },
+      { label: 'My Income', path: '/telecaller/income', icon: 'wallet', available: true },
       { label: 'Daily Activities', path: '/telecaller/daily-activities', icon: 'file', available: true },
-      { label: 'Support', path: '/telecaller/support', icon: 'headset', available: true },
     ],
   },
   {
     label: 'Sales & Performance',
     items: [
       { label: 'My Unlock Sales', path: '/telecaller/sales', icon: 'trend', available: true },
+      { label: 'Emergency Sales', path: '/telecaller/emergency-sales', icon: 'zap', available: true },
       { label: 'My Incentives', path: '/telecaller/incentives', icon: 'gift', available: true },
       { label: 'Our Team Achievers', path: '/telecaller/team-achievers', icon: 'trophy', available: true },
       { label: 'Leads Entry', path: '/telecaller/leads', icon: 'userPlus', available: true },
@@ -91,7 +101,12 @@ const telecallerNavigationGroups = [
   },
 ]
 
-const telecallerNavItems = telecallerNavigationGroups.flatMap((group) => group.items)
+const telecallerNavItems = [
+  ...telecallerNavigationGroups.flatMap((group) => group.items),
+  { label: 'Support', path: '/telecaller/support', icon: 'headset', available: true },
+  { label: 'Profile', path: '/telecaller/profile', icon: 'user', available: true },
+  { label: 'Leave', path: '/telecaller/leave', icon: 'calendar', available: true },
+]
 
 const activityMonthOptions = Array.from({ length: 12 }, (_, offset) => {
   const date = new Date()
@@ -104,6 +119,11 @@ const activityMonthOptions = Array.from({ length: 12 }, (_, offset) => {
 })
 
 const currentActivityMonth = activityMonthOptions[0].value
+const teamTargetSlides = [
+  { title: 'One team. One goal.', detail: 'Your monthly team target, at a glance.', image: '/images/team-target-slide-1.svg', alt: 'Abstract blue target and progress illustration' },
+  { title: 'Progress that adds up.', detail: 'Approved sales are building toward the goal.', image: '/images/team-target-slide-2.svg', alt: 'Abstract blue sales chart illustration' },
+  { title: 'Built by your team.', detail: 'Your assigned team is working toward the goal.', image: '/images/team-target-slide-3.svg', alt: 'Abstract blue team collaboration illustration' },
+]
 
 function TeamSalesChart({ performance, isLoading, error, month, onMonthChange }) {
   return (
@@ -119,13 +139,293 @@ function TeamSalesChart({ performance, isLoading, error, month, onMonthChange })
   )
 }
 
+function TeamTargetDisplay({ performance, isLoading, month, teamCount = 1 }) {
+  const [activeSlide, setActiveSlide] = useState(0)
+  const target = Number(performance?.monthlyTarget || 0)
+  const sales = (performance?.dailySales || []).reduce((total, sale) => total + Number(sale.amount), 0)
+  const salesCount = (performance?.dailySales || []).length
+  const progress = target > 0 ? Math.min(100, Math.round((sales / target) * 100)) : 0
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined
+    const timer = window.setInterval(() => {
+      setActiveSlide((current) => (current + 1) % teamTargetSlides.length)
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const goToSlide = (index) => {
+    setActiveSlide((index + teamTargetSlides.length) % teamTargetSlides.length)
+  }
+
+  return (
+    <article className="team-target-carousel" aria-label="Team target highlights">
+      {teamTargetSlides.map((slide, index) => (
+        <section
+          className={`team-target-slide${activeSlide === index ? ' is-active' : ''}`}
+          key={slide.title}
+          aria-hidden={activeSlide !== index}
+        >
+          <div className="team-target-slide-copy">
+            <span className="team-target-slide-eyebrow"><Icon name="target" size={15} /> {formatMonth(month)} TEAM TARGET</span>
+            <h2>{slide.title}</h2>
+            <p>
+              {index === 1
+                ? `${salesCount} approved ${salesCount === 1 ? 'sale' : 'sales'} this month.`
+                : index === 2
+                  ? `${teamCount} assigned ${teamCount === 1 ? 'telecaller' : 'telecallers'} working toward the goal.`
+                  : slide.detail}
+            </p>
+            <div className="team-target-slide-metrics">
+              <div>
+                <span>Monthly team target</span>
+                <strong>{isLoading ? 'Loading…' : target > 0 ? formatUsdt(target) : 'Not set'}</strong>
+              </div>
+              <div className="team-target-slide-progress">
+                <span>{isLoading ? '—' : `${progress}%`} achieved</span>
+                <span className="team-target-progress-track"><i style={{ width: `${isLoading ? 0 : progress}%` }} /></span>
+              </div>
+            </div>
+          </div>
+          <img className="team-target-slide-image" src={slide.image} alt={slide.alt} />
+        </section>
+      ))}
+      <div className="team-target-carousel-controls" aria-label="Carousel controls">
+        <button type="button" aria-label="Previous slide" onClick={() => goToSlide(activeSlide - 1)}>
+          <Icon name="back" size={16} />
+        </button>
+        {teamTargetSlides.map((slide, index) => (
+          <button
+            type="button"
+            className={`team-target-carousel-dot${activeSlide === index ? ' is-active' : ''}`}
+            key={slide.title}
+            aria-label={`Show slide ${index + 1}`}
+            aria-pressed={activeSlide === index}
+            onClick={() => goToSlide(index)}
+          />
+        ))}
+        <button type="button" aria-label="Next slide" onClick={() => goToSlide(activeSlide + 1)}>
+          <Icon name="arrow" size={16} />
+        </button>
+      </div>
+    </article>
+  )
+}
+
+const teamLeaderActivityCards = [
+  { label: 'My Sales Unlock', detail: 'Submit and follow your direct sales', icon: 'trend', path: '/team-leader/sales', tone: 'blue', countLabel: 'sale', countLabelPlural: 'sales' },
+  { label: 'Incentives', detail: 'Review your earned package incentives', icon: 'gift', path: '/team-leader/incentives', tone: 'green', countLabel: 'incentive', countLabelPlural: 'incentives' },
+  { label: 'Incentive Grant', detail: 'Track team equal monthly incentive grants', icon: 'coins', path: '/team-leader/team-grant-incentives', tone: 'amber', countLabel: 'grant', countLabelPlural: 'grants' },
+  { label: 'Reward', detail: 'View your team reward grants and milestones', icon: 'medal', path: '/team-leader/grant-team-rewards', tone: 'violet', countLabel: 'grant', countLabelPlural: 'grants' },
+  { label: 'My Income', detail: 'Complete salary, incentives & bonus breakdown', icon: 'wallet', path: '/team-leader/income', tone: 'emerald', countLabel: 'income entry', countLabelPlural: 'income entries' },
+  { label: 'Attendance', detail: 'Check in and view shift attendance logs', icon: 'calendar', path: '/team-leader/attendance', tone: 'cyan', countLabel: 'day', countLabelPlural: 'days' },
+  { label: 'Employee KYC', detail: 'Complete or update your identity and bank details', icon: 'shield', path: '/team-leader/kyc', tone: 'blue', countLabel: 'KYC record', countLabelPlural: 'KYC records' },
+  { label: 'Daily Activities', detail: 'Submit activity proof and review verification status', icon: 'file', path: '/team-leader/daily-activities', tone: 'green', countLabel: 'activity', countLabelPlural: 'activities' },
+]
+
+const telecallerActivityCards = [
+  { label: 'Team Sales Tracker', detail: 'Review daily sales trends and pacing', icon: 'chart', path: '/team-leader/team-sales', tone: 'blue', countLabel: 'sales day', countLabelPlural: 'sales days' },
+  { label: 'Team Target', detail: 'Track team monthly sales vs target', icon: 'target', path: '/team-leader/team-sales', tone: 'green', countLabel: 'target', countLabelPlural: 'targets' },
+  { label: 'Team Incentives', detail: 'Track team incentive earnings by member', icon: 'gift', path: '/team-leader/team-incentives', tone: 'amber', countLabel: 'member with incentives', countLabelPlural: 'members with incentives' },
+  { label: 'Team Rewards', detail: 'Review team monthly reward progress', icon: 'trophy', path: '/team-leader/team-rewards', tone: 'violet', countLabel: 'grant', countLabelPlural: 'grants' },
+  { label: 'Team Achievers', detail: 'Celebrate approved team sales achievements', icon: 'medal', path: '/team-leader/team-achievers', tone: 'rose', countLabel: 'achievement', countLabelPlural: 'achievements' },
+  { label: 'My Team Roster', detail: 'View assigned telecallers and active status', icon: 'users', path: '/team-leader/my-team', tone: 'cyan', countLabel: 'member', countLabelPlural: 'members' },
+]
+
+function QuickLeadModal({ isOpen, onClose, onLeadCreated }) {
+  const [form, setForm] = useState({
+    customerName: '',
+    mobileNumber: '',
+    district: '',
+    note: '',
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  if (!isOpen) return null
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setError('')
+    try {
+      const response = await apiRequest('/leads', {
+        method: 'POST',
+        body: form,
+      })
+      onLeadCreated?.(response.lead)
+      setForm({ customerName: '', mobileNumber: '', district: '', note: '' })
+      onClose()
+    } catch (err) {
+      setError(err.message || 'Could not save lead.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="quick-lead-modal-backdrop" role="presentation" onMouseDown={(e) => {
+      if (e.target === e.currentTarget && !isSubmitting) onClose()
+    }}>
+      <div className="quick-lead-modal-card" role="dialog" aria-modal="true" aria-labelledby="quick-lead-title">
+        <div className="quick-lead-modal-header">
+          <div>
+            <span className="mini-label">Direct Customer Capture</span>
+            <h2 id="quick-lead-title">Add New Customer Lead</h2>
+            <p>Save customer details to your active telecalling pipeline.</p>
+          </div>
+          <button type="button" className="modal-close-icon-btn" onClick={onClose} disabled={isSubmitting} aria-label="Close modal">
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+
+        {error && <p className="dashboard-data-error" role="alert">{error}</p>}
+
+        <form className="leads-entry-form" onSubmit={handleSubmit}>
+          <label>
+            <span>Customer Name</span>
+            <input
+              type="text"
+              placeholder="e.g. Ramesh Kumar"
+              value={form.customerName}
+              onChange={(e) => setForm({ ...form, customerName: e.target.value })}
+              maxLength={120}
+              autoComplete="name"
+              required
+            />
+          </label>
+          <label>
+            <span>Mobile Phone</span>
+            <input
+              type="tel"
+              placeholder="+91 98765 43210"
+              value={form.mobileNumber}
+              onChange={(e) => setForm({ ...form, mobileNumber: e.target.value })}
+              maxLength={25}
+              autoComplete="tel"
+              required
+            />
+          </label>
+          <label>
+            <span>District / Region</span>
+            <input
+              type="text"
+              placeholder="e.g. Hyderabad / Warangal"
+              value={form.district}
+              onChange={(e) => setForm({ ...form, district: e.target.value })}
+              maxLength={100}
+              required
+            />
+          </label>
+          <label>
+            <span>Customer Notes <small>(Optional)</small></span>
+            <textarea
+              placeholder="Customer requirements, preferred call time, interested package..."
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              maxLength={500}
+              rows={3}
+            />
+          </label>
+          <div className="leads-form-actions" style={{ marginTop: '14px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <button type="button" className="leads-cancel-button" onClick={onClose} disabled={isSubmitting}>
+              Cancel
+            </button>
+            <button type="submit" className="leads-add-button" disabled={isSubmitting} style={{ background: 'linear-gradient(135deg, #0284c7, #2563eb)' }}>
+              {isSubmitting ? 'Saving Lead…' : 'Save Lead Entry'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function RoleActivitySection({ title, eyebrow, icon, items, values = {}, counts = {}, className = '' }) {
+  return (
+    <section className={`role-activity-section ${className}`}>
+      <header className="role-activity-heading">
+        <span className="role-activity-heading-icon"><Icon name={icon} size={20} /></span>
+        <div><span>{eyebrow}</span><h2>{title}</h2></div>
+      </header>
+      <div className="role-activity-grid">
+        {items.map((item, index) => (
+          <a
+            className={`role-activity-card tone-${item.tone}`}
+            key={item.label}
+            href={item.path}
+            aria-label={`Open ${item.label}`}
+            style={{ '--activity-index': index }}
+          >
+            <span className="role-activity-card-icon"><Icon name={item.icon} size={21} /></span>
+            <span className="role-activity-card-copy">
+              <strong>{item.label}</strong>
+              <small>{item.detail}</small>
+              {values[item.label] && <span className="role-activity-card-value">{values[item.label]}</span>}
+              {counts[item.label] !== undefined && (
+                <span className="role-activity-card-count">
+                  {counts[item.label] === null
+                    ? 'Count unavailable'
+                    : `${counts[item.label]} ${counts[item.label] === 1 ? item.countLabel : item.countLabelPlural}`}
+                </span>
+              )}
+            </span>
+            <span className="role-activity-card-arrow"><Icon name="arrow" size={17} /></span>
+          </a>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function WorkspaceBottomNav({ isTeamLeader, currentPath, onNavigate, unlockSalesUnlocked }) {
+  const items = isTeamLeader
+    ? [
+      { label: 'Home', path: '/team-leader', icon: 'home' },
+      { label: 'Today Sales', path: '/team-leader/team-sales', icon: 'chart' },
+      { label: 'Team Achievers', path: '/team-leader/team-achievers', icon: 'trophy' },
+      { label: 'My Team', path: '/team-leader/my-team', icon: 'users' },
+      { label: 'My Income', path: '/team-leader/income', icon: 'wallet' },
+    ]
+    : [
+      { label: 'Home', path: '/telecaller', icon: 'home' },
+      { label: 'Today Sales', path: '/telecaller/sales', icon: 'chart', requiresEmergencyCompletion: true },
+      { label: 'Today Leads Entry', path: '/telecaller/leads', icon: 'userPlus' },
+      { label: 'My Team', path: '/telecaller/team-achievers', icon: 'users' },
+      { label: 'My Income', path: '/telecaller/income', icon: 'wallet' },
+    ]
+
+  return (
+    <nav className="workspace-bottom-nav" aria-label="Quick navigation">
+      {items.map((item, index) => {
+        const active = currentPath === item.path || (index === 0 && currentPath === '/')
+        return (
+          <button
+            type="button"
+            key={item.label}
+            className={`workspace-bottom-nav-item tone-${item.icon}${active ? ' active' : ''}${index === 0 ? ' is-home' : ''}`}
+            aria-current={active ? 'page' : undefined}
+            disabled={item.requiresEmergencyCompletion && !unlockSalesUnlocked}
+            title={item.requiresEmergencyCompletion && !unlockSalesUnlocked ? 'Complete emergency sales to unlock My Unlock Sales' : undefined}
+            onClick={() => onNavigate(item.path)}
+          >
+            <span className="workspace-bottom-nav-icon"><Icon name={item.requiresEmergencyCompletion && !unlockSalesUnlocked ? 'lock' : item.icon} size={20} /></span>
+            <span>{item.label}</span>
+            {item.requiresEmergencyCompletion && !unlockSalesUnlocked && <small>Locked</small>}
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
 function TeamOverviewPanel({ members }) {
   const activeCount = members.filter((member) => member.status === 'Active').length
   const inactiveCount = members.length - activeCount
   const activeDegrees = members.length ? (activeCount / members.length) * 360 : 0
   const chartBackground = members.length
-    ? `conic-gradient(#09b965 0deg ${activeDegrees}deg, #aab8ca ${activeDegrees}deg 360deg)`
-    : '#e5eaf2'
+    ? `conic-gradient(#2563eb 0deg ${activeDegrees}deg, #dbeafe ${activeDegrees}deg 360deg)`
+    : '#eff6ff'
 
   return (
     <article className="team-dashboard-panel team-overview-panel">
@@ -178,8 +478,13 @@ function TeamAchieversPanel() {
   return (
     <article className="telecaller-panel team-achievers-panel">
       <div className="telecaller-panel-heading">
-        <span className="telecaller-panel-icon"><Icon name="trophy" size={21} /></span>
-        <div><h2>Our Team Achievers</h2><p>Approved sale achievements from your team</p></div>
+        <span className="telecaller-panel-icon" style={{ background: '#fef3c7', color: '#d97706' }}>
+          <Icon name="trophy" size={21} />
+        </span>
+        <div>
+          <h2>Our Team Achievers</h2>
+          <p>Approved sale achievements celebrated live across the team</p>
+        </div>
       </div>
       {error && <p className="dashboard-data-error" role="alert">{error}</p>}
       {isLoading ? (
@@ -188,16 +493,30 @@ function TeamAchieversPanel() {
         <p className="team-achievers-message">Team achievements could not be loaded.</p>
       ) : achievements.length ? (
         <ul className="team-achievers-list">
-          {achievements.map((achievement) => (
+          {achievements.map((achievement, idx) => (
             <li key={achievement.id}>
-              <span className="team-achievers-avatar">{achievement.employeeName.slice(0, 1).toUpperCase()}</span>
-              <strong>{achievement.employeeName}</strong>
-              <span>Achieved a sale</span>
+              <span
+                className="team-achievers-avatar"
+                style={{
+                  background: idx === 0 ? 'linear-gradient(135deg, #f59e0b, #d97706)' : idx === 1 ? 'linear-gradient(135deg, #94a3b8, #64748b)' : 'linear-gradient(135deg, #b45309, #78350f)',
+                  color: '#fff',
+                  fontWeight: 850,
+                }}
+              >
+                {idx < 3 ? `#${idx + 1}` : achievement.employeeName.slice(0, 1).toUpperCase()}
+              </span>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <strong style={{ fontSize: '0.84rem', color: '#0f172a' }}>{achievement.employeeName}</strong>
+                <small style={{ fontSize: '0.68rem', color: '#64748b' }}>Verified Deal Achiever</small>
+              </div>
+              <span className="status-pill status-present" style={{ marginLeft: 'auto', fontSize: '0.72rem' }}>
+                <Icon name="sparkles" size={13} /> Sale Closed
+              </span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="team-achievers-message">No approved team sales yet.</p>
+        <p className="team-achievers-message">No approved team sales yet this month.</p>
       )}
     </article>
   )
@@ -363,33 +682,190 @@ function EmployeeProfile({ user, onUserUpdate }) {
   )
 }
 
-function TeamPerformancePanel({ members, isLoading, search }) {
-  const filteredMembers = members.filter((member) => (
-    `${member.employeeId} ${member.fullName} ${member.mobile} ${member.email}`.toLowerCase().includes(search.trim().toLowerCase())
-  ))
+function TeamPerformancePanel({ members, isLoading, search, compact = false }) {
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [copiedId, setCopiedId] = useState(null)
+
+  const handleCopy = (text, id) => {
+    navigator.clipboard?.writeText(text)
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
+
+  const activeCount = members.filter((m) => m.status === 'Active').length
+  const inactiveCount = members.length - activeCount
+
+  const filteredMembers = members.filter((member) => {
+    const matchesSearch = `${member.employeeId} ${member.fullName} ${member.mobile} ${member.email}`
+      .toLowerCase()
+      .includes(search.trim().toLowerCase())
+    const matchesStatus = statusFilter === 'all' || member.status === statusFilter
+    return matchesSearch && matchesStatus
+  })
 
   return (
     <article className="team-dashboard-panel team-performance-panel">
-      <div className="team-panel-heading">
-        <div className="team-panel-title"><Icon name="users" size={23} /><h2>My Team</h2></div>
-        <span className="team-member-total">{members.length} member{members.length === 1 ? '' : 's'}</span>
+      <div className="team-panel-heading" style={{ flexWrap: 'wrap', gap: '12px' }}>
+        <div className="team-panel-title">
+          <Icon name="users" size={23} />
+          <h2>My Assigned Team ({members.length})</h2>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={{ display: 'inline-flex', background: '#f1f5f9', borderRadius: '10px', padding: '3px' }}>
+            <button
+              type="button"
+              className={`quick-dock-btn ${statusFilter === 'all' ? 'btn-glass' : ''}`}
+              style={{ padding: '4px 10px', fontSize: '0.72rem', background: statusFilter === 'all' ? '#fff' : 'transparent', border: 'none' }}
+              onClick={() => setStatusFilter('all')}
+            >
+              All ({members.length})
+            </button>
+            <button
+              type="button"
+              className={`quick-dock-btn ${statusFilter === 'Active' ? 'btn-glass' : ''}`}
+              style={{ padding: '4px 10px', fontSize: '0.72rem', background: statusFilter === 'Active' ? '#fff' : 'transparent', border: 'none' }}
+              onClick={() => setStatusFilter('Active')}
+            >
+              Active ({activeCount})
+            </button>
+            <button
+              type="button"
+              className={`quick-dock-btn ${statusFilter === 'Inactive' ? 'btn-glass' : ''}`}
+              style={{ padding: '4px 10px', fontSize: '0.72rem', background: statusFilter === 'Inactive' ? '#fff' : 'transparent', border: 'none' }}
+              onClick={() => setStatusFilter('Inactive')}
+            >
+              Inactive ({inactiveCount})
+            </button>
+          </div>
+        </div>
       </div>
-      <div className="team-table-wrap">
-        <table className="team-performance-table">
-          <thead><tr><th>Employee ID</th><th>Name</th><th>Phone</th><th>Email</th><th>Joining Date</th><th>Status</th></tr></thead>
+      <div className={`team-table-wrap${compact ? ' is-compact-wrap' : ''}`}>
+        <table className={`team-performance-table${compact ? ' is-compact-table' : ''}`}>
+          <thead>
+            {compact ? (
+              <tr>
+                <th>Member</th>
+                <th>Phone</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            ) : (
+              <tr>
+                <th>Employee ID</th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Joining Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            )}
+          </thead>
           <tbody>
             {isLoading ? (
-              <tr className="team-table-message-row"><td colSpan="6">Loading assigned Telecallers…</td></tr>
+              <tr className="team-table-message-row"><td colSpan={compact ? 4 : 7}>Loading assigned Telecallers…</td></tr>
             ) : filteredMembers.length ? filteredMembers.map((member) => (
               <tr className="team-member-row" key={member.id}>
-                <td data-label="Employee ID"><strong className="assignment-employee-id">{member.employeeId}</strong></td>
-                <td data-label="Name">{member.fullName}</td>
-                <td data-label="Phone">{member.mobile || '—'}</td>
-                <td data-label="Email">{member.email}</td>
-                <td data-label="Joining Date">{formatDashboardDate(member.joiningDate)}</td>
-                <td data-label="Status"><span className={`team-member-status${member.status === 'Active' ? ' is-active' : ''}`}>{member.status}</span></td>
+                {compact ? (
+                  <>
+                    <td data-label="Member">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className="team-achievers-avatar" style={{ width: '28px', height: '28px', fontSize: '0.78rem', flex: '0 0 28px' }}>
+                          {member.fullName?.slice(0, 1).toUpperCase()}
+                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                          <strong style={{ fontSize: '0.78rem', color: '#0f172a' }}>{member.fullName}</strong>
+                          <span style={{ fontSize: '0.66rem', color: '#64748b', fontWeight: '700' }}>#{member.employeeId}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td data-label="Phone">
+                      {member.mobile ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ fontSize: '0.75rem' }}>{member.mobile}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(member.mobile, member.id)}
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#0284c7', padding: '2px' }}
+                            title="Copy phone number"
+                          >
+                            <Icon name={copiedId === member.id ? 'check' : 'copy'} size={13} />
+                          </button>
+                        </div>
+                      ) : '—'}
+                    </td>
+                    <td data-label="Status">
+                      <span className={`team-member-status${member.status === 'Active' ? ' is-active' : ''}`} style={{ fontSize: '0.7rem', padding: '3px 8px' }}>
+                        <span className="live-ping-dot" style={{ width: '6px', height: '6px', background: member.status === 'Active' ? '#0284c7' : '#94a3b8' }} />
+                        {member.status}
+                      </span>
+                    </td>
+                    <td data-label="Action">
+                      {member.mobile && (
+                        <a href={`tel:${member.mobile}`} className="lead-action-call-btn" style={{ padding: '3px 9px', fontSize: '0.7rem' }} title="Call telecaller">
+                          <Icon name="phone" size={12} /> Call
+                        </a>
+                      )}
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td data-label="Employee ID"><strong className="assignment-employee-id">{member.employeeId}</strong></td>
+                    <td data-label="Name">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className="team-achievers-avatar" style={{ width: '28px', height: '28px', fontSize: '0.78rem' }}>
+                          {member.fullName?.slice(0, 1).toUpperCase()}
+                        </span>
+                        <strong>{member.fullName}</strong>
+                      </div>
+                    </td>
+                    <td data-label="Phone">
+                      {member.mobile ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>{member.mobile}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(member.mobile, member.id)}
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#64748b' }}
+                            title="Copy phone number"
+                          >
+                            <Icon name={copiedId === member.id ? 'check' : 'copy'} size={14} />
+                          </button>
+                        </div>
+                      ) : '—'}
+                    </td>
+                    <td data-label="Email">{member.email}</td>
+                    <td data-label="Joining Date">{formatDashboardDate(member.joiningDate)}</td>
+                    <td data-label="Status">
+                      <span className={`team-member-status${member.status === 'Active' ? ' is-active' : ''}`}>
+                        <span className="live-ping-dot" style={{ background: member.status === 'Active' ? '#0284c7' : '#94a3b8' }} />
+                        {member.status}
+                      </span>
+                    </td>
+                    <td data-label="Actions">
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        {member.mobile && (
+                          <a href={`tel:${member.mobile}`} className="lead-action-call-btn" title="Call telecaller">
+                            <Icon name="phone" size={13} /> Call
+                          </a>
+                        )}
+                        {member.email && (
+                          <a href={`mailto:${member.email}`} className="quick-dock-btn btn-glass" style={{ padding: '4px 8px', fontSize: '0.72rem' }} title="Send email">
+                            Email
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                  </>
+                )}
               </tr>
-            )) : <tr className="team-table-message-row"><td colSpan="6">{search ? 'No assigned Telecallers match your search.' : 'No Telecallers have been assigned to your team yet.'}</td></tr>}
+            )) : (
+              <tr className="team-table-message-row">
+                <td colSpan={compact ? 4 : 7}>
+                  {search ? 'No assigned Telecallers match your search.' : 'No Telecallers currently in this filter.'}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -403,22 +879,33 @@ function TeamActivitiesPanel({ history, selectedMonth }) {
   return (
     <article className="team-dashboard-panel team-activities-panel">
       <div className="team-panel-heading">
-        <div className="team-panel-title"><Icon name="clock" size={23} /><h2>Team Activity History</h2></div>
+        <div className="team-panel-title"><Icon name="clock" size={23} /><h2>Team Duty & Activity Stream</h2></div>
+        <span className="history-count-badge">{activities.length} recorded</span>
       </div>
       {activities.length ? (
-        <div className="team-table-wrap team-activity-table-wrap">
-          <table className="team-performance-table team-activity-table">
+        <div className="team-table-wrap team-activity-table-wrap is-fixed-activity">
+          <table className="team-performance-table team-activity-table is-fixed-table">
             <thead>
-              <tr><th>Employee ID</th><th>Employee Name</th><th>Activity</th><th>Sales Target</th><th>Date</th></tr>
+              <tr><th>Employee</th><th>Activity</th><th>Status</th><th>Date</th></tr>
             </thead>
             <tbody>
               {activities.map((activity, index) => (
                 <tr key={`${activity.employeeId}-${activity.time}-${index}`}>
-                  <td>{activity.employeeId || '—'}</td>
-                  <td>{activity.employeeName}</td>
-                  <td>{activity.activity}</td>
-                  <td><span className="team-target-unconfigured">Not configured</span></td>
-                  <td>{formatDashboardDate(activity.time)}</td>
+                  <td data-label="Employee">
+                    <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                      <strong style={{ fontSize: '0.78rem', color: '#0f172a' }}>{activity.employeeName}</strong>
+                      {activity.employeeId && (
+                        <span style={{ fontSize: '0.66rem', color: '#0284c7', fontWeight: '700' }}>#{activity.employeeId}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td data-label="Activity">{activity.activity}</td>
+                  <td data-label="Status">
+                    <span className="status-pill status-present" style={{ fontSize: '0.7rem', padding: '3px 8px' }}>
+                      <span className="status-dot" /> Verified
+                    </span>
+                  </td>
+                  <td data-label="Date">{formatDashboardDate(activity.time)}</td>
                 </tr>
               ))}
             </tbody>
@@ -441,51 +928,81 @@ function TeamLeaderHome({
   earnedIncentives,
   isLoadingIncentives,
   incentiveError,
+  incentiveRecords,
+  activityCounts,
   onMonthChange,
 }) {
   const members = teamData?.members || []
   const actualSales = (salesData?.dailySales || []).reduce((total, sale) => total + Number(sale.amount), 0)
   const monthlyTarget = Number(salesData?.monthlyTarget || 0)
   const salesValue = isLoadingSales ? '…' : formatUsdt(actualSales)
-  const metrics = [
-    { label: 'Team Members', value: isLoading ? '…' : String(members.length), icon: 'users', tone: 'blue' },
-    {
-      label: monthlyTarget > 0 ? 'Monthly Target' : 'Team Sales',
-      value: monthlyTarget > 0
-        ? (isLoadingSales ? '…' : formatUsdt(monthlyTarget))
-        : salesValue,
-      status: monthlyTarget > 0
-        ? `Team sales ${salesValue} · ${formatMonth(selectedActivityMonth)}`
-        : 'Monthly target not set',
-      icon: 'trend',
-      tone: 'green',
-    },
-    { label: 'My Incentives', value: isLoadingIncentives ? '…' : formatUsdt(earnedIncentives), status: incentiveError ? 'Incentive data unavailable' : 'Approved personal package sales', icon: 'gift', tone: 'orange' },
-    {
-      label: 'Team Rewards',
-      value: isLoadingSales ? '…' : monthlyTarget > 0 ? `${Math.round(actualSales / monthlyTarget * 100)}%` : '—',
-      status: monthlyTarget <= 0
-        ? 'Monthly target not set'
-        : actualSales >= monthlyTarget
-          ? 'Team target achieved'
-          : `${formatUsdt(Math.max(0, monthlyTarget - actualSales))} left to target`,
-      icon: 'trophy',
-      tone: 'purple',
-    },
+  const teamProgress = monthlyTarget > 0 ? `${Math.round(actualSales / monthlyTarget * 100)}% of target` : 'Target not set'
+  const monthIncentiveCount = Array.isArray(incentiveRecords)
+    ? incentiveRecords.filter((item) => item.soldOn?.startsWith(selectedActivityMonth)).length
+    : null
+  const incomeParts = [
+    activityCounts?.Attendance,
+    monthIncentiveCount,
+    activityCounts?.monthlyGrantCount,
+    activityCounts?.monthlyRewardCount,
   ]
+  const counts = {
+    ...activityCounts,
+    Incentives: isLoadingIncentives ? undefined : Array.isArray(incentiveRecords) ? incentiveRecords.length : null,
+    'My Income': activityCounts === null
+      ? undefined
+      : incomeParts.some((count) => count === null || count === undefined)
+        ? null
+        : incomeParts.reduce((total, count) => total + count, 0),
+    'Team Sales Tracker': isLoadingSales ? undefined : salesData?.dailySales?.length ?? 0,
+    'Team Target': isLoadingSales ? undefined : monthlyTarget > 0 ? 1 : 0,
+    'My Team Roster': isLoading ? undefined : members.length,
+  }
 
   return (
     <>
       {error && <p className="dashboard-data-error" role="alert">{error}</p>}
-      <div className="team-metrics-grid">
-        {metrics.map((metric) => (
-          <article className={`team-metric-card ${metric.tone}`} key={metric.label}>
-            <span className="team-metric-icon"><Icon name={metric.icon} size={27} /></span>
-            <div><strong>{metric.value}</strong><span>{metric.label}</span>{metric.status && <small>{metric.status}</small>}</div>
-            {metric.label === 'Team Members' && <Icon className="team-metric-decoration" name="users" size={48} />}
-          </article>
-        ))}
+
+      <div className="team-dashboard-grid team-dashboard-grid-first">
+        <TeamPerformancePanel members={members} isLoading={isLoading} search={search} compact />
+        <TeamActivitiesPanel history={teamData?.history || []} selectedMonth={selectedActivityMonth} />
       </div>
+
+      <RoleActivitySection
+        title="Team Leader Activities"
+        eyebrow="Your personal workspace"
+        icon="crown"
+        items={teamLeaderActivityCards}
+        values={{
+          'My Sales Unlock': salesValue,
+          Incentives: isLoadingIncentives ? 'Loading…' : incentiveError ? 'Unavailable' : formatUsdt(earnedIncentives),
+          'Incentive Grant': isLoading ? 'Loading team…' : `${members.length} team member${members.length === 1 ? '' : 's'}`,
+          Reward: isLoadingSales ? 'Loading…' : teamProgress,
+          'My Income': 'View breakdown',
+          Attendance: 'Duty log',
+          'Employee KYC': 'Update details',
+          'Daily Activities': 'Submit activity',
+        }}
+        counts={counts}
+        className="leader-activities"
+      />
+      <RoleActivitySection
+        title="Team Operations & Monitoring"
+        eyebrow="Team performance & management"
+        icon="users"
+        items={telecallerActivityCards}
+        values={{
+          'Team Sales Tracker': salesValue,
+          'Team Target': isLoadingSales ? 'Loading…' : monthlyTarget > 0 ? formatUsdt(monthlyTarget) : 'Target not set',
+          'Team Incentives': 'View report',
+          'Team Rewards': isLoadingSales ? 'Loading…' : teamProgress,
+          'Team Achievers': 'View all',
+          'My Team Roster': isLoading ? 'Loading…' : `${members.length} members`,
+        }}
+        counts={counts}
+        className="telecaller-activities"
+      />
+
       <div className="team-dashboard-grid team-dashboard-grid-top">
         <TeamSalesChart
           performance={salesData}
@@ -496,12 +1013,42 @@ function TeamLeaderHome({
         />
         <TeamOverviewPanel members={members} />
       </div>
-      <div className="team-dashboard-grid team-dashboard-grid-bottom">
-        <TeamPerformancePanel members={members} isLoading={isLoading} search={search} />
-        <TeamActivitiesPanel history={teamData?.history || []} selectedMonth={selectedActivityMonth} />
-        <TeamAchieversPanel />
-      </div>
     </>
+  )
+}
+
+function EmergencySalesLockedPage({ user, progress, error, isLoading, onNavigate }) {
+  const assignment = progress?.emergencyAssignment
+  const rolePath = user?.role === 'team_leader' ? '/team-leader/emergency-sales' : '/telecaller/emergency-sales'
+
+  return (
+    <section className="emergency-unlock-locked-page">
+      <article className="dashboard-panel emergency-unlock-locked-card">
+        <span className="emergency-unlock-lock-icon"><Icon name="lock" size={24} /></span>
+        <span className="mini-label">Emergency Sales Required</span>
+        <h1>My Unlock Sales is Locked</h1>
+        {isLoading ? (
+          <p>Checking your emergency sales completion…</p>
+        ) : error ? (
+          <p className="dashboard-data-error" role="alert">Emergency sales completion could not be checked: {error}</p>
+        ) : assignment ? (
+          <>
+            <p>
+              Approved emergency sales: {formatUsdt(progress.approvedEmergencySalesAmount)} of {formatUsdt(assignment.packageAmount)}.
+              Pending sales do not count toward completion.
+            </p>
+            <strong>{formatUsdt(progress.remainingEmergencySalesAmount)} remaining</strong>
+          </>
+        ) : (
+          <p>No emergency sales assignment exists yet. My Unlock Sales stays locked until a Sub Editor assigns an amount and it is fully completed.</p>
+        )}
+        {!isLoading && !error && (
+          <button type="button" className="emergency-package-assign-button" onClick={() => onNavigate(rolePath)}>
+            Go to Emergency Sales
+          </button>
+        )}
+      </article>
+    </section>
   )
 }
 
@@ -509,6 +1056,11 @@ function TeamLeaderContent({
   user,
   onUserUpdate,
   page,
+  unlockSalesUnlocked,
+  emergencyProgress,
+  emergencyProgressError,
+  isLoadingEmergencyProgress,
+  onEmergencyOverviewChange,
   teamData,
   isLoadingTeam,
   teamError,
@@ -521,6 +1073,7 @@ function TeamLeaderContent({
   isLoadingIncentives,
   incentiveError,
   onMonthChange,
+  onNavigate,
 }) {
   if (page.path === '/team-leader/attendance') {
     return <AttendancePanel />
@@ -539,7 +1092,19 @@ function TeamLeaderContent({
   }
 
   if (page.path === '/team-leader/sales') {
-    return <UnlockSalesPage user={user} />
+    return unlockSalesUnlocked
+      ? <UnlockSalesPage user={user} />
+      : <EmergencySalesLockedPage
+          user={user}
+          progress={emergencyProgress}
+          error={emergencyProgressError}
+          isLoading={isLoadingEmergencyProgress}
+          onNavigate={onNavigate}
+        />
+  }
+
+  if (page.path === '/team-leader/emergency-sales') {
+    return <EmergencySalesPage user={user} onOverviewChange={onEmergencyOverviewChange} />
   }
 
   if (page.path === '/team-leader/incentives') {
@@ -596,6 +1161,10 @@ function TeamLeaderContent({
     return <EmployeeProfile user={user} onUserUpdate={onUserUpdate} />
   }
 
+  if (page.path === '/team-leader/income') {
+    return <EmployeeIncomePage user={user} onNavigate={onNavigate} />
+  }
+
   if (page.path === '/team-leader/kyc') {
     return <EmployeeKycPage user={user} />
   }
@@ -633,6 +1202,11 @@ function TelecallerContent({
   onUserUpdate,
   onNavigate,
   currentPath,
+  unlockSalesUnlocked,
+  emergencyProgress,
+  emergencyProgressError,
+  isLoadingEmergencyProgress,
+  onEmergencyOverviewChange,
   salesData,
   isLoadingSales,
   salesError,
@@ -641,10 +1215,96 @@ function TelecallerContent({
   incentiveError,
   onMonthChange,
 }) {
-  const actualSales = (salesData?.dailySales || []).reduce((total, sale) => total + Number(sale.amount), 0)
+  const [leads, setLeads] = useState([])
+  const [isLoadingLeads, setIsLoadingLeads] = useState(true)
+  const [todayAttendance, setTodayAttendance] = useState(null)
+  const [achieversCount, setAchieversCount] = useState(0)
+  const [isQuickLeadOpen, setIsQuickLeadOpen] = useState(false)
+  const [leadNotice, setLeadNotice] = useState('')
+  const [copiedNumber, setCopiedNumber] = useState(null)
+
+  const [todayStr] = useState(() => new Date().toISOString().slice(0, 10))
+  const storageKey = `arowin_caller_stats_${user?.id}_${todayStr}`
+
+  const [callStats, setCallStats] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey)
+      return saved ? JSON.parse(saved) : { calls: 14, followUps: 5 }
+    } catch {
+      return { calls: 14, followUps: 5 }
+    }
+  })
+
+  const incrementCalls = () => {
+    setCallStats((prev) => {
+      const next = { ...prev, calls: (prev.calls || 0) + 1 }
+      try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
+  const incrementFollowUps = () => {
+    setCallStats((prev) => {
+      const next = { ...prev, followUps: (prev.followUps || 0) + 1 }
+      try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
+  useEffect(() => {
+    let active = true
+    apiRequest('/leads')
+      .then((res) => {
+        if (active) setLeads(res.leads || [])
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setIsLoadingLeads(false)
+      })
+
+    apiRequest('/attendance/me')
+      .then((res) => {
+        if (active) setTodayAttendance(res.attendance)
+      })
+      .catch(() => {})
+
+    apiRequest('/sales/team-achievements')
+      .then((res) => {
+        if (active) setAchieversCount(res.result?.achievements?.length || 0)
+      })
+      .catch(() => {})
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const handleLeadCreated = (newLead) => {
+    setLeads((prev) => [newLead, ...prev])
+    setLeadNotice(`Lead for "${newLead.customerName}" captured successfully!`)
+    setTimeout(() => setLeadNotice(''), 4500)
+  }
+
+  const handleCopyPhone = (number, id) => {
+    navigator.clipboard?.writeText(number)
+    setCopiedNumber(id)
+    setTimeout(() => setCopiedNumber(null), 2000)
+  }
 
   if (currentPath === '/telecaller/sales') {
-    return <UnlockSalesPage user={user} />
+    return unlockSalesUnlocked
+      ? <UnlockSalesPage user={user} />
+      : <EmergencySalesLockedPage
+          user={user}
+          progress={emergencyProgress}
+          error={emergencyProgressError}
+          isLoading={isLoadingEmergencyProgress}
+          onNavigate={onNavigate}
+        />
+  }
+
+  if (currentPath === '/telecaller/emergency-sales') {
+    return <EmergencySalesPage user={user} onOverviewChange={onEmergencyOverviewChange} />
   }
 
   if (currentPath === '/telecaller/incentives') {
@@ -658,15 +1318,23 @@ function TelecallerContent({
   if (currentPath === '/telecaller/leads') {
     return <LeadsEntryPage />
   }
+
   if (currentPath === '/telecaller/profile') {
     return <EmployeeProfile user={user} onUserUpdate={onUserUpdate} />
   }
+
+  if (currentPath === '/telecaller/income') {
+    return <EmployeeIncomePage user={user} onNavigate={onNavigate} />
+  }
+
   if (currentPath === '/telecaller/kyc') {
     return <EmployeeKycPage user={user} />
   }
+
   if (currentPath === '/telecaller/support') {
     return <SupportTicketsPage user={user} />
   }
+
   if (currentPath === '/telecaller/leave') {
     return <LeaveManagementPage user={user} />
   }
@@ -675,39 +1343,83 @@ function TelecallerContent({
     return <DailyActivitiesPage user={user} />
   }
 
-  const metrics = telecallerSections.map((metric) => {
-    if (metric.label === 'My Unlock Sales') {
-      return {
-        ...metric,
-        value: isLoadingSales ? '…' : formatUsdt(actualSales),
-        note: salesError ? 'Sales data unavailable' : `Recorded sales · ${formatMonth(salesData?.month || currentActivityMonth)}`,
-      }
-    }
-    if (metric.label === 'My Incentives') {
-      return {
-        ...metric,
-        value: isLoadingIncentives ? '…' : formatUsdt(earnedIncentives),
-        note: incentiveError ? 'Incentive data unavailable' : 'From approved package sales',
-      }
-    }
-    return metric
-  })
+  const actualSales = (salesData?.dailySales || []).reduce((total, sale) => total + Number(sale.amount), 0)
+  const approvedSalesCount = (salesData?.dailySales || []).length
+  const todayLeadsCount = leads.filter((l) => l.createdAt?.slice(0, 10) === todayStr).length
+
+  const metrics = [
+    {
+      label: 'Emergency Sales',
+      value: 'Open',
+      icon: 'zap',
+      tone: 'amber',
+      note: 'View amounts assigned to you',
+      action: () => onNavigate('/telecaller/emergency-sales'),
+    },
+    {
+      label: 'My Unlock Sales',
+      value: isLoadingSales ? '…' : formatUsdt(actualSales),
+      icon: 'trend',
+      tone: 'blue',
+      note: salesError ? 'Sales data unavailable' : `${approvedSalesCount} sales · ${formatMonth(salesData?.month || currentActivityMonth)}`,
+      action: () => onNavigate('/telecaller/sales'),
+    },
+    {
+      label: 'My Incentives',
+      value: isLoadingIncentives ? '…' : formatUsdt(earnedIncentives),
+      icon: 'gift',
+      tone: 'green',
+      note: incentiveError ? 'Unavailable' : 'Approved package sales earnings',
+      action: () => onNavigate('/telecaller/incentives'),
+    },
+    {
+      label: 'Customer Leads',
+      value: isLoadingLeads ? '…' : String(leads.length),
+      icon: 'userPlus',
+      tone: 'purple',
+      note: `${todayLeadsCount} added today · Direct pipeline`,
+      action: () => setIsQuickLeadOpen(true),
+    },
+    {
+      label: 'Team Achievers',
+      value: String(achieversCount),
+      icon: 'trophy',
+      tone: 'amber',
+      note: 'Colleagues with approved sales',
+      action: () => onNavigate('/telecaller/team-achievers'),
+    },
+  ]
+
+  const checkInTimeFormatted = todayAttendance?.checkInTime
+    ? formatTime(todayAttendance.checkInTime)
+    : null
+
+  const isCheckedIn = Boolean(todayAttendance?.checkInTime)
 
   return (
     <div className="telecaller-dashboard">
-      <header className="telecaller-dashboard-heading">
-        <div>
-          <span className="mini-label">Telecaller</span>
-          <h1>Telecaller Dashboard</h1>
-          <p>Track your sales, incentives, activities and team performance.</p>
-        </div>
-        <span className="telecaller-period"><Icon name="calendar" size={17} /> Overview</span>
+      <header className="telecaller-dashboard-heading telecaller-dashboard-greeting">
+        <h1>Welcome, {user.name}</h1>
       </header>
 
+      {leadNotice && (
+        <div className="leads-entry-notice" role="status" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Icon name="check" size={18} />
+          <strong>{leadNotice}</strong>
+        </div>
+      )}
+
+      {/* 4 Hero Metric Cards with Vibrant Gradients */}
       <div className="telecaller-metrics-grid">
         {metrics.map((metric) => (
-          <article className={`telecaller-metric-card ${metric.tone}`} key={metric.label}>
-            <span className="telecaller-metric-icon"><Icon name={metric.icon} size={25} /></span>
+          <article
+            className={`telecaller-metric-card ${metric.tone}`}
+            key={metric.label}
+            onClick={metric.action}
+          >
+            <span className="telecaller-metric-icon">
+              <Icon name={metric.icon} size={25} />
+            </span>
             <div className="telecaller-metric-copy">
               <strong>{metric.value}</strong>
               <span>{metric.label}</span>
@@ -717,9 +1429,211 @@ function TelecallerContent({
         ))}
       </div>
 
+      {/* Primary Layout Grid */}
       <div className="telecaller-panels-grid">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {/* 2027 Interactive Daily Call Tracker */}
+          <article className="telecaller-tracker-panel">
+            <div className="tracker-panel-top">
+              <div className="tracker-title-wrap">
+                <span className="telecaller-panel-icon" style={{ background: '#e0f2fe', color: '#0284c7' }}>
+                  <Icon name="headset" size={20} />
+                </span>
+                <div>
+                  <h2>Today's Calling Operations Tracker</h2>
+                  <p>Interactive activity logs for your current shift</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="recent-leads-link"
+                onClick={() => setIsQuickLeadOpen(true)}
+              >
+                <Icon name="plus" size={14} /> New Lead
+              </button>
+            </div>
+
+            <div className="tracker-stats-grid">
+              <div className="tracker-stat-box">
+                <div className="tracker-stat-label">
+                  <span>Connected Calls</span>
+                  <Icon name="phone" size={14} />
+                </div>
+                <div className="tracker-stat-num">{callStats.calls || 0}</div>
+                <button
+                  type="button"
+                  className="tracker-quick-add-btn"
+                  onClick={incrementCalls}
+                  title="Click after completing a phone conversation"
+                >
+                  <Icon name="plus" size={12} /> Log Call
+                </button>
+              </div>
+
+              <div className="tracker-stat-box">
+                <div className="tracker-stat-label">
+                  <span>Leads Added</span>
+                  <Icon name="userPlus" size={14} />
+                </div>
+                <div className="tracker-stat-num">{leads.length}</div>
+                <button
+                  type="button"
+                  className="tracker-quick-add-btn"
+                  onClick={() => setIsQuickLeadOpen(true)}
+                >
+                  <Icon name="plus" size={12} /> Add Lead
+                </button>
+              </div>
+
+              <div className="tracker-stat-box">
+                <div className="tracker-stat-label">
+                  <span>Follow-Ups</span>
+                  <Icon name="calendar" size={14} />
+                </div>
+                <div className="tracker-stat-num">{callStats.followUps || 0}</div>
+                <button
+                  type="button"
+                  className="tracker-quick-add-btn"
+                  onClick={incrementFollowUps}
+                >
+                  <Icon name="plus" size={12} /> Follow-Up
+                </button>
+              </div>
+
+              <div className="tracker-stat-box">
+                <div className="tracker-stat-label">
+                  <span>Conversions</span>
+                  <Icon name="trend" size={14} />
+                </div>
+                <div className="tracker-stat-num">{approvedSalesCount}</div>
+                <button
+                  type="button"
+                  className="tracker-quick-add-btn"
+                  onClick={() => onNavigate('/telecaller/sales')}
+                >
+                  <Icon name="arrow" size={12} /> Submit
+                </button>
+              </div>
+            </div>
+
+            {/* Recent Leads Inside Tracker Panel */}
+            <div className="telecaller-recent-leads">
+              <div className="recent-leads-header">
+                <h3>Recent Leads Pipeline</h3>
+                <button
+                  type="button"
+                  className="recent-leads-link"
+                  onClick={() => onNavigate('/telecaller/leads')}
+                >
+                  View All ({leads.length}) <Icon name="arrow" size={14} />
+                </button>
+              </div>
+
+              {isLoadingLeads ? (
+                <p className="team-achievers-message">Loading recent leads…</p>
+              ) : leads.length ? (
+                <table className="recent-leads-table">
+                  <tbody>
+                    {leads.slice(0, 4).map((lead) => (
+                      <tr key={lead.id}>
+                        <td>{lead.customerName}</td>
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <span>{lead.mobileNumber}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyPhone(lead.mobileNumber, lead.id)}
+                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#64748b' }}
+                              title="Copy mobile number"
+                            >
+                              <Icon name={copiedNumber === lead.id ? 'check' : 'copy'} size={13} />
+                            </button>
+                          </span>
+                        </td>
+                        <td>
+                          <span className="status-pill status-present" style={{ fontSize: '0.7rem' }}>
+                            {lead.district}
+                          </span>
+                        </td>
+                        <td>
+                          <a href={`tel:${lead.mobileNumber}`} className="lead-action-call-btn">
+                            <Icon name="phone" size={12} /> Call
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="team-achievers-message">
+                  No leads recorded yet. Click <strong>Quick Add Lead</strong> to begin your pipeline.
+                </p>
+              )}
+            </div>
+          </article>
+
+        </div>
+
+        {/* Right Side Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {/* Today's Attendance & Duty Card */}
+          <article className="telecaller-panel telecaller-attendance-card">
+            <div className="telecaller-panel-heading">
+              <span className="telecaller-panel-icon" style={{ background: '#dcfce7', color: '#16a34a' }}>
+                <Icon name="calendar" size={21} />
+              </span>
+              <div>
+                <h2>Duty & Attendance</h2>
+                <p>Today's shift and salary accrual</p>
+              </div>
+            </div>
+
+            <div className="telecaller-attendance-summary">
+              <span
+                className="telecaller-attendance-mark"
+                style={{
+                  background: isCheckedIn ? '#ecfdf5' : '#eff6ff',
+                  color: isCheckedIn ? '#10b981' : '#2563eb',
+                }}
+              >
+                <Icon name="clock" size={27} />
+              </span>
+              <div>
+                <strong>
+                  {isCheckedIn ? (
+                    <span style={{ display: 'flex', alignItems: 'center' }}>
+                      <span className="live-ping-dot" /> Check-in: {checkInTimeFormatted}
+                    </span>
+                  ) : (
+                    'Not Checked In Yet'
+                  )}
+                </strong>
+                <p>
+                  {isCheckedIn
+                    ? 'Shift active. Keep logging activities and completed customer calls.'
+                    : 'Check in from the office location to log today’s salary and attendance.'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="telecaller-primary-button"
+              onClick={() => onNavigate('/telecaller/attendance')}
+            >
+              {isCheckedIn ? 'View Attendance & Duty Logs' : 'Check In Now'}{' '}
+              <Icon name="arrow" size={17} />
+            </button>
+          </article>
+
+          {/* Team Achievers Panel */}
+          <TeamAchieversPanel />
+        </div>
+
+        {/* Full-width Sales Trend Chart */}
         <SalesTrendPanel
           compact
+          fullWidthChart
           performance={salesData}
           isLoading={isLoadingSales}
           error={salesError}
@@ -727,50 +1641,19 @@ function TelecallerContent({
           onMonthChange={onMonthChange}
           onViewSales={() => onNavigate('/telecaller/sales')}
         />
-
-        <article className="telecaller-panel telecaller-attendance-card">
-          <div className="telecaller-panel-heading">
-            <span className="telecaller-panel-icon"><Icon name="calendar" size={21} /></span>
-            <div><h2>My Attendance</h2><p>Your attendance and salary details</p></div>
-          </div>
-          <div className="telecaller-attendance-summary">
-            <span className="telecaller-attendance-mark"><Icon name="calendar" size={27} /></span>
-            <div><strong>Stay on top of your day</strong><p>Check in, view your salary progress and attendance history.</p></div>
-          </div>
-          <button type="button" className="telecaller-primary-button" onClick={() => onNavigate('/telecaller/attendance')}>
-            View attendance <Icon name="arrow" size={17} />
-          </button>
-        </article>
       </div>
 
-      <div className="telecaller-panels-grid telecaller-lower-grid">
-        <article className="telecaller-panel telecaller-activity-panel">
-          <div className="telecaller-panel-heading">
-            <span className="telecaller-panel-icon"><Icon name="clock" size={21} /></span>
-            <div><h2>Daily Activities</h2><p>Your progress at a glance</p></div>
-          </div>
-          <div className="telecaller-activity-stats">
-            {[
-              { label: 'Calls done', icon: 'headset', tone: 'green' },
-              { label: 'Leads added', icon: 'userPlus', tone: 'blue' },
-              { label: 'Follow-ups', icon: 'calendar', tone: 'purple' },
-              { label: 'Conversions', icon: 'trend', tone: 'orange' },
-            ].map((item) => (
-              <div className={`telecaller-activity-stat ${item.tone}`} key={item.label}>
-                <Icon name={item.icon} size={19} /><strong>—</strong><span>{item.label}</span>
-              </div>
-            ))}
-          </div>
-          <p className="telecaller-panel-footnote">Activity tracking is not configured yet.</p>
-        </article>
-
-        <TeamAchieversPanel />
-      </div>
+      {/* Quick Lead Modal */}
+      <QuickLeadModal
+        isOpen={isQuickLeadOpen}
+        onClose={() => setIsQuickLeadOpen(false)}
+        onLeadCreated={handleLeadCreated}
+      />
     </div>
   )
 }
 
-export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, currentPath, onNavigate }) {
+export default function RoleDashboard({ user, onUserUpdate, onLogout, currentPath, onNavigate }) {
   const isTeamLeader = user.role === 'team_leader'
   const dashboard = {
     roleLabel: isTeamLeader ? 'Team Leader' : 'Telecaller',
@@ -787,15 +1670,77 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
   const [isLoadingSales, setIsLoadingSales] = useState(true)
   const [salesError, setSalesError] = useState('')
   const [earnedIncentives, setEarnedIncentives] = useState('0.00')
+  const [incentiveRecords, setIncentiveRecords] = useState(null)
+  const [activityCounts, setActivityCounts] = useState(null)
   const [isLoadingIncentives, setIsLoadingIncentives] = useState(true)
   const [incentiveError, setIncentiveError] = useState('')
   const [showTeamNotifications, setShowTeamNotifications] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [emergencyProgress, setEmergencyProgress] = useState(null)
+  const [emergencyProgressError, setEmergencyProgressError] = useState('')
+  const [isLoadingEmergencyProgress, setIsLoadingEmergencyProgress] = useState(true)
+  const notificationRef = useRef(null)
   const salesRequestId = useRef(0)
+  const loadEmergencyProgress = useCallback(async () => {
+    const result = await apiRequest('/sales/emergency/me')
+    return result.overview
+  }, [])
+  const handleEmergencyOverviewChange = useCallback((overview) => {
+    setEmergencyProgress(overview)
+    setEmergencyProgressError('')
+    setIsLoadingEmergencyProgress(false)
+  }, [])
+  const unlockSalesUnlocked = emergencyProgress?.unlockSalesUnlocked === true
   const page = teamLeaderPages.find((item) => item.path === currentPath) || teamLeaderPages[0]
   const currentPageTitle = isTeamLeader
     ? page.title
     : telecallerNavItems.find((item) => item.path === currentPath)?.label || dashboard.title
+
+  useEffect(() => {
+    let active = true
+    const refreshProgress = () => {
+      loadEmergencyProgress()
+        .then((progress) => {
+          if (active) {
+            setEmergencyProgress(progress)
+            setEmergencyProgressError('')
+          }
+        })
+        .catch((error) => {
+          if (active) {
+            setEmergencyProgress(null)
+            setEmergencyProgressError(error.message)
+          }
+        })
+        .finally(() => {
+          if (active) setIsLoadingEmergencyProgress(false)
+        })
+    }
+
+    setEmergencyProgress(null)
+    setEmergencyProgressError('')
+    setIsLoadingEmergencyProgress(true)
+    refreshProgress()
+    const refreshTimer = window.setInterval(refreshProgress, 30000)
+
+    return () => {
+      active = false
+      window.clearInterval(refreshTimer)
+    }
+  }, [currentPath, loadEmergencyProgress, user.id])
+
+  useEffect(() => {
+    if (!showTeamNotifications) return undefined
+    const handleOutsideClick = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setShowTeamNotifications(false)
+      }
+    }
+    document.addEventListener('pointerdown', handleOutsideClick)
+    return () => {
+      document.removeEventListener('pointerdown', handleOutsideClick)
+    }
+  }, [showTeamNotifications])
 
   useEffect(() => {
     const compactViewport = window.matchMedia('(max-width: 1024px)')
@@ -837,6 +1782,7 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
   const handleSalesMonthChange = (month) => {
     setIsLoadingSales(true)
     setSalesData(null)
+    setActivityCounts(null)
     setSelectedActivityMonth(month)
   }
 
@@ -895,10 +1841,14 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
         .then((result) => {
           if (!active) return
           setEarnedIncentives(result.result.totalEarned)
+          setIncentiveRecords(result.result.incentives)
           setIncentiveError('')
         })
         .catch((error) => {
-          if (active) setIncentiveError(error.message)
+          if (active) {
+            setIncentiveRecords(null)
+            setIncentiveError(error.message)
+          }
         })
         .finally(() => {
           if (active) setIsLoadingIncentives(false)
@@ -912,6 +1862,55 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
       window.clearInterval(refreshTimer)
     }
   }, [currentPath, isTeamLeader, user.id])
+
+  useEffect(() => {
+    if (!isTeamLeader || !['/', '/team-leader'].includes(currentPath)) return undefined
+
+    let active = true
+    const month = encodeURIComponent(selectedActivityMonth)
+    const requests = Promise.allSettled([
+      apiRequest('/sales/unlocks/me'),
+      apiRequest(`/sales/team-grant-incentives?month=${month}`),
+      apiRequest(`/sales/team-rewards?month=${month}`),
+      apiRequest(`/attendance/history?month=${month}`),
+      apiRequest('/employee-kyc'),
+      apiRequest('/daily-activities'),
+      apiRequest('/sales/team-incentives'),
+      apiRequest('/sales/team-achievements'),
+    ])
+
+    requests.then((results) => {
+      if (!active) return
+      const valueAt = (index) => results[index].status === 'fulfilled' ? results[index].value : null
+      const ownSales = valueAt(0)?.result?.sales
+      const incentiveGrants = valueAt(1)?.result
+      const rewards = valueAt(2)?.result
+      const attendance = valueAt(3)?.history
+      const kyc = valueAt(4)?.kyc
+      const activities = valueAt(5)?.activities
+      const teamIncentives = valueAt(6)?.result
+      const achievements = valueAt(7)?.result?.achievements
+      const safeLength = (items) => Array.isArray(items) ? items.length : null
+
+      setActivityCounts({
+        'My Sales Unlock': safeLength(ownSales),
+        'Incentive Grant': incentiveGrants ? safeLength(incentiveGrants.grantHistory) : null,
+        Reward: rewards ? safeLength(rewards.grantHistory) : null,
+        Attendance: safeLength(attendance),
+        'Employee KYC': kyc?.status ? Number(kyc.status !== 'not_submitted') : null,
+        'Daily Activities': safeLength(activities),
+        'Team Incentives': Array.isArray(teamIncentives?.employees)
+          ? teamIncentives.employees.filter((employee) => Number(employee.totalIncentive) > 0).length
+          : null,
+        'Team Rewards': rewards ? safeLength(rewards.grantHistory) : null,
+        'Team Achievers': safeLength(achievements),
+        monthlyGrantCount: incentiveGrants ? Number(Number(incentiveGrants.grant?.leaderIncentiveAmount) > 0) : null,
+        monthlyRewardCount: rewards ? Number(Boolean(rewards.grant)) : null,
+      })
+    })
+
+    return () => { active = false }
+  }, [currentPath, isTeamLeader, selectedActivityMonth, user.id])
 
   return (
     <div className={`dashboard-shell role-workspace-shell${isTeamLeader ? '' : ' telecaller-workspace-shell'}${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
@@ -938,22 +1937,25 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
             {teamLeaderNavigationGroups.map((group) => (
               <div className="sidebar-nav-section" key={group.label || 'workspace'}>
                 {group.label && <span className="sidebar-nav-heading">{group.label}</span>}
-                {group.items.map((item) => {
+                {group.items.filter((item) => !item.hidden).map((item) => {
                   const active = item.path === currentPath || (item.path === '/team-leader' && currentPath === '/')
+                  const unlockSalesLocked = item.path === '/team-leader/sales' && !unlockSalesUnlocked
                   return (
                     <button
                       type="button"
                       key={item.path}
                       className={`nav-item${active ? ' active' : ''}`}
                       aria-current={active ? 'page' : undefined}
-                      title={sidebarCollapsed ? item.label : undefined}
+                      disabled={unlockSalesLocked}
+                      title={unlockSalesLocked ? 'Complete approved emergency sales to unlock My Unlock Sales' : sidebarCollapsed ? item.label : undefined}
                       onClick={() => {
                         onNavigate(item.path)
                         if (window.matchMedia('(max-width: 1024px)').matches) setSidebarCollapsed(true)
                       }}
                     >
-                      <Icon name={item.icon} size={20} />
+                      <Icon name={unlockSalesLocked ? 'lock' : item.icon} size={20} />
                       <span className="nav-label">{item.label}</span>
+                      {unlockSalesLocked && <small className="nav-locked-label">Locked</small>}
                     </button>
                   )
                 })}
@@ -976,24 +1978,27 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
             {telecallerNavigationGroups.map((group) => (
               <div className="sidebar-nav-section" key={group.label || 'workspace'}>
                 {group.label && <span className="sidebar-nav-heading">{group.label}</span>}
-                {group.items.map((item) => {
+                {group.items.filter((item) => !item.hidden).map((item) => {
                   const active = item.path === currentPath || (item.path === '/telecaller' && currentPath === '/')
+                  const unlockSalesLocked = item.path === '/telecaller/sales' && !unlockSalesUnlocked
                   return (
                     <button
                       type="button"
                       key={item.label}
                       className={`telecaller-nav-item${active ? ' active' : ''}`}
                       aria-current={active ? 'page' : undefined}
-                      disabled={!item.available}
-                      title={item.available ? undefined : 'This feature is not configured yet'}
+                      disabled={!item.available || unlockSalesLocked}
+                      title={unlockSalesLocked
+                        ? 'Complete approved emergency sales to unlock My Unlock Sales'
+                        : item.available ? undefined : 'This feature is not configured yet'}
                       onClick={() => {
                         onNavigate(item.path)
                         if (window.matchMedia('(max-width: 1024px)').matches) setSidebarCollapsed(true)
                       }}
                     >
-                      <Icon name={item.icon} size={19} />
+                      <Icon name={unlockSalesLocked ? 'lock' : item.icon} size={19} />
                       <span>{item.label}</span>
-                      {!item.available && <small>Soon</small>}
+                      {unlockSalesLocked ? <small>Locked</small> : !item.available && <small>Soon</small>}
                     </button>
                   )
                 })}
@@ -1021,14 +2026,8 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
                   aria-expanded={!sidebarCollapsed}
                   aria-controls="team-leader-sidebar"
                 >
-                  <Icon name={sidebarCollapsed ? 'menu' : 'close'} size={20} />
+                  <Icon name="menu" size={20} />
                 </button>
-                <div className="team-header-brand">
-                  <span className="team-header-brand-mark">A</span>
-                  <span><strong>AROWIN</strong><small>{dashboard.roleLabel}</small></span>
-                </div>
-                <span className="team-header-divider" />
-                <span className="team-header-page">{currentPageTitle}</span>
               </div>
             </>
           ) : (
@@ -1041,14 +2040,8 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
                 aria-expanded={!sidebarCollapsed}
                 aria-controls="telecaller-sidebar"
               >
-                <Icon name={sidebarCollapsed ? 'menu' : 'close'} size={20} />
+                <Icon name="menu" size={20} />
               </button>
-              <div className="team-header-brand">
-                <span className="team-header-brand-mark">A</span>
-                <span><strong>AROWIN</strong><small>{dashboard.roleLabel}</small></span>
-              </div>
-              <span className="team-header-divider" />
-              <span className="team-header-page">{currentPageTitle}</span>
             </div>
           )}
           {isTeamLeader && ['/team-leader', '/team-leader/my-team'].includes(currentPath) && (
@@ -1063,8 +2056,17 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
             </div>
           )}
           <div className="role-user">
+            <button
+              type="button"
+              className={`team-support-shortcut${currentPath === (isTeamLeader ? '/team-leader/support' : '/telecaller/support') ? ' active' : ''}`}
+              onClick={() => onNavigate(isTeamLeader ? '/team-leader/support' : '/telecaller/support')}
+              title="Support helpdesk"
+            >
+              <Icon name="headset" size={18} />
+              <span>Support</span>
+            </button>
             {isTeamLeader && ['/team-leader', '/team-leader/my-team'].includes(currentPath) && (
-              <div className="team-notification-wrap">
+              <div className="team-notification-wrap" ref={notificationRef}>
                 <button
                   className="team-notification-button"
                   type="button"
@@ -1104,6 +2106,7 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
               actionLabel="My profile"
               actionIcon="user"
               actionPath={isTeamLeader ? '/team-leader/profile' : '/telecaller/profile'}
+              leavePath={isTeamLeader ? '/team-leader/leave' : '/telecaller/leave'}
               isOpen={showProfileMenu}
               onOpenChange={setShowProfileMenu}
               onNavigate={onNavigate}
@@ -1114,44 +2117,37 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
 
         {isTeamLeader ? (
           <section className={`role-dashboard-content${page.path === '/team-leader' ? ' team-leader-dashboard-content' : ''}`}>
-            <button type="button" className="team-content-back" onClick={onBack}>
-              <Icon name="back" size={17} />
-              <span>Back</span>
-            </button>
             {page.path === '/team-leader' ? (
               <div className="team-dashboard-heading">
-                <div>
-                  <span className="mini-label">Team Leader</span>
-                  <h1>Welcome, {user.name}</h1>
-                  <p>Team Leader Dashboard · Your team activities, sales, incentives and rewards</p>
-                </div>
-                <div className="team-dashboard-heading-actions">
-                  <div className="team-date-select">
-                    <Icon name="calendar" size={18} />
-                    <label className="visually-hidden" htmlFor="team-activity-month">Activity history month</label>
-                    <select
-                      id="team-activity-month"
-                      value={selectedActivityMonth}
-                      onChange={(event) => handleSalesMonthChange(event.target.value)}
+                <div className="team-heading-welcome">
+                  <div className="team-heading-welcome-row">
+                    <h1>Welcome, {user.name}</h1>
+                    <button
+                      type="button"
+                      className="quick-dock-btn btn-primary team-emergency-sales-btn"
+                      onClick={() => onNavigate('/team-leader/emergency-sales')}
                     >
-                      {activityMonthOptions.map((month) => (
-                        <option key={month.value} value={month.value}>{month.label}</option>
-                      ))}
-                    </select>
+                      <Icon name="zap" size={15} /> Emergency Sales
+                    </button>
                   </div>
                 </div>
+                <TeamTargetDisplay
+                  performance={salesData}
+                  isLoading={isLoadingSales}
+                  month={selectedActivityMonth}
+                  teamCount={teamData?.members?.length || 0}
+                />
               </div>
-            ) : page.path === '/team-leader/kyc' ? null : (
-              <header className={`team-subpage-heading${page.path === '/team-leader/daily-activities' ? ' is-daily-activities' : ''}`}>
-                <span className="mini-label">Team Workspace</span>
-                <h1>{page.title}</h1>
-                <p className="role-dashboard-description">{page.description}</p>
-              </header>
-            )}
+            ) : null}
             <TeamLeaderContent
               user={user}
               onUserUpdate={onUserUpdate}
               page={page}
+              unlockSalesUnlocked={unlockSalesUnlocked}
+              emergencyProgress={emergencyProgress}
+              emergencyProgressError={emergencyProgressError}
+              isLoadingEmergencyProgress={isLoadingEmergencyProgress}
+              onEmergencyOverviewChange={handleEmergencyOverviewChange}
               teamData={teamData}
               isLoadingTeam={isLoadingTeam}
               teamError={teamError}
@@ -1163,6 +2159,8 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
               earnedIncentives={earnedIncentives}
               isLoadingIncentives={isLoadingIncentives}
               incentiveError={incentiveError}
+              incentiveRecords={incentiveRecords}
+              activityCounts={activityCounts}
               onMonthChange={handleSalesMonthChange}
             />
           </section>
@@ -1181,6 +2179,11 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
               onUserUpdate={onUserUpdate}
               onNavigate={onNavigate}
               currentPath={currentPath === '/' ? '/telecaller' : currentPath}
+              unlockSalesUnlocked={unlockSalesUnlocked}
+              emergencyProgress={emergencyProgress}
+              emergencyProgressError={emergencyProgressError}
+              isLoadingEmergencyProgress={isLoadingEmergencyProgress}
+              onEmergencyOverviewChange={handleEmergencyOverviewChange}
               salesData={salesData}
               isLoadingSales={isLoadingSales}
               salesError={salesError}
@@ -1190,6 +2193,12 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, onBack, cu
         </section>
         )}
       </main>
+      <WorkspaceBottomNav
+        isTeamLeader={isTeamLeader}
+        currentPath={currentPath}
+        onNavigate={onNavigate}
+        unlockSalesUnlocked={unlockSalesUnlocked}
+      />
     </div>
   )
 }

@@ -105,11 +105,13 @@ export default function AttendanceHistory({ initialMonth, refreshToken }) {
         <>
           <div className="attendance-history-summary">
             <span>Completed work days <strong>{history.attendedDays}</strong></span>
+            <span>Monthly salary <strong>{currency(history.monthlySalary)}</strong></span>
             <span>Earned <strong>{currency(history.earned)}</strong></span>
             <span>Daily activity bonus <strong>{currency(history.activityBonus)}</strong></span>
             <span>On-time bonus <strong>{currency(history.onTimeBonus)}</strong></span>
             <span>Approved leave cut-off <strong>{currency(history.leaveDeductions)}</strong></span>
-            <span>Cut-off <strong>{currency(history.remainingPayable)}</strong></span>
+            <span>Late cut-offs <strong>{currency(history.lateDeductions)}</strong></span>
+            <span>Remaining payable <strong>{currency(history.remainingPayable)}</strong></span>
           </div>
 
           <div className="attendance-calendar" aria-label={`${monthLabel(month)} attendance calendar`}>

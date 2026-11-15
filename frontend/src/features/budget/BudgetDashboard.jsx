@@ -198,21 +198,30 @@ export default function BudgetDashboard({ onNavigate }) {
       {saveError && !showCompanyModal && !showAllocationModal && <p className="budget-error" role="alert">{saveError}</p>}
 
       <section className="budget-grid" aria-label="Company and category budgets">
-        <article className="budget-card tone-blue budget-company-card">
+        <article
+          className="budget-card tone-blue budget-company-card"
+          onClick={() => {
+            setSaveError('')
+            setShowCompanyModal(true)
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              setSaveError('')
+              setShowCompanyModal(true)
+            }
+          }}
+        >
           <span className="budget-card-icon"><Icon name="coins" size={22} /></span>
           <span className="budget-card-label">Total Budget</span>
           <strong>{isLoading ? 'Loading…' : budget?.companyBudget ? currency(budget.companyBudget) : 'Not set'}</strong>
-          {budget?.bankDetails && (
-            <div className="budget-bank-summary">
-              <span>{budget.bankDetails.bankName}</span>
-              <span>{budget.bankDetails.accountHolderName}</span>
-              <span>A/C {budget.bankDetails.maskedAccountNumber} · IFSC {budget.bankDetails.ifscCode}</span>
-            </div>
-          )}
           <button
             type="button"
             className="budget-card-action-button"
-            onClick={() => {
+            onClick={(event) => {
+              event.stopPropagation()
               setSaveError('')
               setShowCompanyModal(true)
             }}
@@ -223,7 +232,10 @@ export default function BudgetDashboard({ onNavigate }) {
             type="button"
             className="budget-primary-button budget-card-assign-button"
             disabled={isLoading || !budget?.companyBudget}
-            onClick={openAllocationModal}
+            onClick={(event) => {
+              event.stopPropagation()
+              openAllocationModal()
+            }}
           >
             Assign Budget
           </button>

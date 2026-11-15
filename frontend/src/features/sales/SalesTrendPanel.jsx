@@ -42,13 +42,13 @@ function DateAxis({ days, x, y }) {
   ))
 }
 
-function DailySalesChart({ days, month, dailyTotals, dailyTarget }) {
-  const width = 720
-  const height = 260
+function DailySalesChart({ days, month, dailyTotals, dailyTarget, fullWidth }) {
+  const width = fullWidth ? 900 : 720
+  const height = fullWidth ? 210 : 260
   const left = 48
   const right = 18
-  const top = 18
-  const bottom = 38
+  const top = fullWidth ? 14 : 18
+  const bottom = fullWidth ? 30 : 38
   const chartWidth = width - left - right
   const chartHeight = height - top - bottom
   const maximum = Math.max(dailyTarget * 1.18, ...dailyTotals, 1)
@@ -98,12 +98,13 @@ function DailySalesChart({ days, month, dailyTotals, dailyTarget }) {
   )
 }
 
-function WeeklySalesChart({ days, dailyTotals, weeklyTarget }) {
-  const width = 720
+function WeeklySalesChart({ days, dailyTotals, weeklyTarget, fullWidth }) {
+  const width = fullWidth ? 900 : 720
   const left = 118
   const right = 112
-  const top = 24
-  const rowHeight = 48
+  const top = fullWidth ? 18 : 24
+  const rowHeight = fullWidth ? 36 : 48
+  const barHeight = fullWidth ? 18 : 21
   const chartWidth = width - left - right
   const weeks = Array.from({ length: Math.ceil(days / 7) }, (_, index) => {
     const start = index * 7
@@ -122,14 +123,14 @@ function WeeklySalesChart({ days, dailyTotals, weeklyTarget }) {
         const tone = achievementTone(week.total, week.target)
         return (
           <g key={week.number}>
-            <text x={left - 13} y={y + 15} className="sales-week-label" textAnchor="end">{`Week ${week.number}`}</text>
-            <text x={left - 13} y={y + 30} className="sales-week-date-label" textAnchor="end">{`${week.start}–${week.end}`}</text>
-            <rect x={left} y={y} width={chartWidth} height="21" rx="8" className="sales-week-track" />
-            <line x1={left + chartWidth * 0.5 * (week.target / maximum)} x2={left + chartWidth * 0.5 * (week.target / maximum)} y1={y - 3} y2={y + 24} className="sales-week-break-even" />
-            <line x1={left + chartWidth * (week.target / maximum)} x2={left + chartWidth * (week.target / maximum)} y1={y - 3} y2={y + 24} className="sales-week-target" />
-            {fillWidth > 0 && <rect x={left} y={y} width={fillWidth} height="21" rx="8" className={`sales-week-fill tone-${tone}`} />}
-            <text x={width - right + 12} y={y + 14} className="sales-week-amount">{formatAmount(week.total)}</text>
-            {weeklyTarget > 0 && <text x={width - right + 12} y={y + 29} className={`sales-week-percent tone-text-${tone}`}>{`${Math.round((week.total / week.target) * 100)}% of target`}</text>}
+            <text x={left - 13} y={y + (fullWidth ? 12 : 15)} className="sales-week-label" textAnchor="end">{`Week ${week.number}`}</text>
+            <text x={left - 13} y={y + (fullWidth ? 24 : 30)} className="sales-week-date-label" textAnchor="end">{`${week.start}–${week.end}`}</text>
+            <rect x={left} y={y} width={chartWidth} height={barHeight} rx="8" className="sales-week-track" />
+            <line x1={left + chartWidth * 0.5 * (week.target / maximum)} x2={left + chartWidth * 0.5 * (week.target / maximum)} y1={y - 3} y2={y + barHeight + 3} className="sales-week-break-even" />
+            <line x1={left + chartWidth * (week.target / maximum)} x2={left + chartWidth * (week.target / maximum)} y1={y - 3} y2={y + barHeight + 3} className="sales-week-target" />
+            {fillWidth > 0 && <rect x={left} y={y} width={fillWidth} height={barHeight} rx="8" className={`sales-week-fill tone-${tone}`} />}
+            <text x={width - right + 12} y={y + (fullWidth ? 13 : 14)} className="sales-week-amount">{formatAmount(week.total)}</text>
+            {weeklyTarget > 0 && <text x={width - right + 12} y={y + (fullWidth ? 25 : 29)} className={`sales-week-percent tone-text-${tone}`}>{`${Math.round((week.total / week.target) * 100)}% of target`}</text>}
           </g>
         )
       })}
@@ -145,13 +146,13 @@ function WeeklySalesChart({ days, dailyTotals, weeklyTarget }) {
   )
 }
 
-function MonthlySalesChart({ days, dailyTotals, monthlyTarget }) {
-  const width = 720
-  const height = 260
+function MonthlySalesChart({ days, dailyTotals, monthlyTarget, fullWidth }) {
+  const width = fullWidth ? 900 : 720
+  const height = fullWidth ? 210 : 260
   const left = 50
   const right = 20
-  const top = 20
-  const bottom = 36
+  const top = fullWidth ? 14 : 20
+  const bottom = fullWidth ? 30 : 36
   const chartWidth = width - left - right
   const chartHeight = height - top - bottom
   const cumulative = dailyTotals.map((_, index) => dailyTotals.slice(0, index + 1).reduce((sum, amount) => sum + amount, 0))
@@ -199,6 +200,7 @@ export default function SalesTrendPanel({
   onDailySaleSaved,
   canRecord = false,
   compact = false,
+  fullWidthChart = false,
   team = false,
   onViewSales,
 }) {
@@ -315,9 +317,9 @@ export default function SalesTrendPanel({
           )}
 
           <div className={`sales-chart-visual chart-${chartType}`}>
-            {chartType === 'daily' && <DailySalesChart days={days} month={month} dailyTotals={dailyTotals} dailyTarget={dailyTarget} />}
-            {chartType === 'weekly' && <WeeklySalesChart days={days} dailyTotals={dailyTotals} weeklyTarget={weeklyTarget} />}
-            {chartType === 'monthly' && <MonthlySalesChart days={days} dailyTotals={dailyTotals} monthlyTarget={monthlyTarget} />}
+            {chartType === 'daily' && <DailySalesChart days={days} month={month} dailyTotals={dailyTotals} dailyTarget={dailyTarget} fullWidth={fullWidthChart} />}
+            {chartType === 'weekly' && <WeeklySalesChart days={days} dailyTotals={dailyTotals} weeklyTarget={weeklyTarget} fullWidth={fullWidthChart} />}
+            {chartType === 'monthly' && <MonthlySalesChart days={days} dailyTotals={dailyTotals} monthlyTarget={monthlyTarget} fullWidth={fullWidthChart} />}
           </div>
 
           {monthlyTarget <= 0 && (

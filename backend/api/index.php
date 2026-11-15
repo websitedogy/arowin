@@ -5,6 +5,7 @@ declare(strict_types=1);
 require __DIR__ . '/bootstrap.php';
 
 use Arowin\Database;
+use Arowin\GlobalCustomerDatabase;
 use Arowin\Modules\Auth\AuthController;
 use Arowin\Modules\Attendance\AttendanceController;
 use Arowin\Modules\Budget\BudgetController;
@@ -18,8 +19,10 @@ use Arowin\Modules\Leads\LeadController;
 use Arowin\Modules\TeamAssignments\TeamAssignmentController;
 use Arowin\Modules\Targets\SalesTargetController;
 use Arowin\Modules\Sales\SalesController;
+use Arowin\Modules\Sales\GlobalCustomerLookup;
 use Arowin\Modules\Sales\UnlockOtpController;
 use Arowin\Modules\Support\SupportController;
+use Arowin\Modules\Notifications\NotificationController;
 use Arowin\Shared\AppTime;
 
 $allowedOrigins = array_filter(array_map(
@@ -242,6 +245,14 @@ try {
         jsonResponse(['success' => true, 'settings' => $settings]);
     }
 
+    if ($path === '/api/attendance/report' && $method === 'GET') {
+        requireSubEditor();
+        $report = (new AttendanceController(Database::connect()))->subEditorMonthlyReport(
+            (string) ($_GET['month'] ?? AppTime::now()->format('Y-m'))
+        );
+        jsonResponse(['success' => true, 'report' => $report]);
+    }
+
     if ($path === '/api/daily-activities/settings' && $method === 'GET') {
         requireSubEditor();
         $settings = (new DailyActivityController(Database::connect()))->bonusSettings();
@@ -328,6 +339,37 @@ try {
                 $role === 'sub_editor' ? null : (int) $_SESSION['user']['id']
             ),
         ]);
+    }
+
+    if ($path === '/api/notifications' && $method === 'GET') {
+        requireSubEditor();
+        jsonResponse([
+            'success' => true,
+            'result' => (new NotificationController(Database::connect()))->listForSubEditor(
+                (int) $_SESSION['user']['id']
+            ),
+        ]);
+    }
+
+    if ($path === '/api/notifications/triggers' && $method === 'POST') {
+        requireSubEditor();
+        $setting = (new NotificationController(Database::connect()))->saveTrigger(
+            parseJsonBody(),
+            (int) $_SESSION['user']['id']
+        );
+        jsonResponse(['success' => true, 'trigger' => $setting]);
+    }
+
+    if (is_string($path)
+        && preg_match('#^/api/notifications/([a-z_]+)/([1-9][0-9]*)/read$#', $path, $matches)
+        && $method === 'POST') {
+        requireSubEditor();
+        (new NotificationController(Database::connect()))->markRead(
+            (int) $_SESSION['user']['id'],
+            $matches[1],
+            (int) $matches[2]
+        );
+        jsonResponse(['success' => true]);
     }
 
     if ($path === '/api/support/tickets' && $method === 'POST') {
@@ -614,6 +656,14 @@ try {
         ], 201);
     }
 
+    if ($path === '/api/leads/all' && $method === 'GET') {
+        requireSubEditor();
+        jsonResponse([
+            'success' => true,
+            'leads' => (new LeadController(Database::connect()))->listAllForSubEditor(),
+        ]);
+    }
+
     if ($path === '/api/sales/summary' && $method === 'GET') {
         requireSubEditor();
         $sales = new SalesController(Database::connect());
@@ -621,6 +671,88 @@ try {
             'success' => true,
             'summary' => $sales->subEditorSummary((string) ($_GET['period'] ?? 'total')),
         ]);
+    }
+
+    if ($path === '/api/sales/emergency/me' && $method === 'GET') {
+        requireAuthenticated();
+        if (!in_array($_SESSION['user']['role'], ['team_leader', 'telecaller'], true)) {
+            jsonResponse(['success' => false, 'message' => 'Emergency sales are only available to Team Leaders and Telecallers.'], 403);
+        }
+        $sales = new SalesController(Database::connect());
+        $employeeId = (int) $_SESSION['user']['id'];
+        jsonResponse([
+            'success' => true,
+            'assignments' => $sales->listMyEmergencySalesAssignments($employeeId),
+            'overview' => $sales->myEmergencySalesOverview($employeeId),
+        ]);
+    }
+
+    if ($path === '/api/sales/emergency/me/customer' && $method === 'POST') {
+        requireSalesEmployee();
+        $sales = new SalesController(Database::connect());
+        $progress = $sales->emergencySalesProgress((int) $_SESSION['user']['id']);
+        if (!$progress['canSubmitEmergencySale']) {
+            jsonResponse(['success' => false, 'message' => 'There is no incomplete emergency sales assignment available.'], 409);
+        }
+        $payload = parseJsonBody();
+        $customer = (new GlobalCustomerLookup(GlobalCustomerDatabase::connect()))
+            ->lookupCustomer((string) ($payload['customerId'] ?? ''));
+        jsonResponse(['success' => true, 'customer' => $customer]);
+    }
+
+    if ($path === '/api/sales/emergency/me/submissions' && $method === 'POST') {
+        requireSalesEmployee();
+        $employeeId = (int) $_SESSION['user']['id'];
+        $sales = new SalesController(Database::connect());
+        $progress = $sales->emergencySalesProgress($employeeId);
+        if (
+            !$progress['canSubmitEmergencySale']
+            || $progress['emergencyAssignment'] === null
+        ) {
+            jsonResponse(['success' => false, 'message' => 'There is no incomplete emergency sales assignment available.'], 409);
+        }
+
+        $verified = $_SESSION['unlock_sales_otp_verified'] ?? null;
+        if (
+            !is_array($verified)
+            || (int) ($verified['userId'] ?? 0) !== $employeeId
+            || (int) ($verified['expiresAt'] ?? 0) < time()
+        ) {
+            unset($_SESSION['unlock_sales_otp_verified']);
+            jsonResponse(['success' => false, 'message' => 'Verify the email OTP before submitting an emergency sale.'], 409);
+        }
+        unset($_SESSION['unlock_sales_otp_verified']);
+
+        $payload = parseJsonBody();
+        $customer = (new GlobalCustomerLookup(GlobalCustomerDatabase::connect()))
+            ->lookupCustomer((string) ($payload['customerId'] ?? ''));
+        $sale = $sales->submitUnlockSale(
+            $employeeId,
+            $customer,
+            $progress['emergencyAssignment']['id']
+        );
+        jsonResponse(['success' => true, 'sale' => $sale], 201);
+    }
+
+    if ($path === '/api/sales/emergency' && $method === 'GET') {
+        requireSubEditor();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'result' => $sales->listEmergencySalesAssignments(),
+        ]);
+    }
+
+    if ($path === '/api/sales/emergency' && $method === 'POST') {
+        requireSubEditor();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'assignment' => $sales->assignEmergencyPackage(
+                parseJsonBody(),
+                (int) $_SESSION['user']['id']
+            ),
+        ], 201);
     }
 
     if ($path === '/api/sales/packages' && $method === 'GET') {
@@ -647,14 +779,27 @@ try {
     if ($path === '/api/sales/unlocks/me' && $method === 'GET') {
         requireSalesEmployee();
         $sales = new SalesController(Database::connect());
+        requireEmergencySalesComplete($sales, (int) $_SESSION['user']['id']);
         jsonResponse([
             'success' => true,
             'result' => $sales->employeeUnlockSales((int) $_SESSION['user']['id']),
         ]);
     }
 
+    if ($path === '/api/sales/unlocks/customer' && $method === 'POST') {
+        requireSalesEmployee();
+        $sales = new SalesController(Database::connect());
+        requireEmergencySalesComplete($sales, (int) $_SESSION['user']['id']);
+        $payload = parseJsonBody();
+        $customer = (new GlobalCustomerLookup(GlobalCustomerDatabase::connect()))
+            ->lookupCustomer((string) ($payload['customerId'] ?? ''));
+        jsonResponse(['success' => true, 'customer' => $customer]);
+    }
+
     if ($path === '/api/sales/unlocks' && $method === 'POST') {
         requireSalesEmployee();
+        $sales = new SalesController(Database::connect());
+        requireEmergencySalesComplete($sales, (int) $_SESSION['user']['id']);
         $verified = $_SESSION['unlock_sales_otp_verified'] ?? null;
         if (
             !is_array($verified)
@@ -664,9 +809,11 @@ try {
             unset($_SESSION['unlock_sales_otp_verified']);
             jsonResponse(['success' => false, 'message' => 'Verify the email OTP before submitting a sale for approval.'], 409);
         }
-        $sales = new SalesController(Database::connect());
         unset($_SESSION['unlock_sales_otp_verified']);
-        $sale = $sales->submitUnlockSale();
+        $payload = parseJsonBody();
+        $customer = (new GlobalCustomerLookup(GlobalCustomerDatabase::connect()))
+            ->lookupCustomer((string) ($payload['customerId'] ?? ''));
+        $sale = $sales->submitUnlockSale((int) $_SESSION['user']['id'], $customer);
         jsonResponse(['success' => true, 'sale' => $sale], 201);
     }
 
@@ -675,7 +822,10 @@ try {
         $sales = new SalesController(Database::connect());
         jsonResponse([
             'success' => true,
-            'result' => $sales->listUnlockSalesForReview((string) ($_GET['status'] ?? 'all')),
+            'result' => $sales->listUnlockSalesForReview(
+                (string) ($_GET['status'] ?? 'all'),
+                (string) ($_GET['type'] ?? 'all')
+            ),
         ]);
     }
 
@@ -740,6 +890,22 @@ try {
         ]);
     }
 
+    if ($path === '/api/sales/rewards/achieved' && $method === 'GET') {
+        requireSubEditor();
+        jsonResponse([
+            'success' => true,
+            'rewards' => (new SalesController(Database::connect()))->subEditorAchievedRewards(),
+        ]);
+    }
+
+    if ($path === '/api/sales/rewards/granted' && $method === 'GET') {
+        requireSubEditor();
+        jsonResponse([
+            'success' => true,
+            'rewards' => (new SalesController(Database::connect()))->subEditorGrantedRewards(),
+        ]);
+    }
+
     if ($path === '/api/sales/team-grant-incentives' && $method === 'GET') {
         requireAuthenticated();
         if ($_SESSION['user']['role'] !== 'team_leader') {
@@ -762,6 +928,31 @@ try {
             'success' => true,
             'result' => $sales->subEditorEarnedIncentives(),
         ]);
+    }
+
+    if ($path === '/api/sales/incentives/paid' && $method === 'GET') {
+        requireSubEditor();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'result' => $sales->subEditorPaidIncentives(
+                (string) ($_GET['month'] ?? AppTime::now()->format('Y-m'))
+            ),
+        ]);
+    }
+
+    if ($path === '/api/sales/incentives/paid' && $method === 'POST') {
+        requireSubEditor();
+        $payload = parseJsonBody();
+        $sales = new SalesController(Database::connect());
+        jsonResponse([
+            'success' => true,
+            'payout' => $sales->markMonthlyIncentivePaid(
+                (int) ($payload['employeeId'] ?? 0),
+                (string) ($payload['month'] ?? ''),
+                (int) $_SESSION['user']['id']
+            ),
+        ], 201);
     }
 
     if ($path === '/api/sales/daily' && $method === 'POST') {
@@ -932,6 +1123,16 @@ function requireSalesEmployee(): void
     $message = RouteAuthorization::ensureSalesEmployee($_SESSION ?? []);
     if ($message !== null) {
         jsonResponse(['success' => false, 'message' => $message], 403);
+    }
+}
+
+function requireEmergencySalesComplete(SalesController $sales, int $employeeId): void
+{
+    if (!$sales->emergencySalesProgress($employeeId)['unlockSalesUnlocked']) {
+        jsonResponse([
+            'success' => false,
+            'message' => 'Complete your assigned emergency sales amount before opening My Unlock Sales.',
+        ], 403);
     }
 }
 

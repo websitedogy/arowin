@@ -72,7 +72,21 @@ The first Employee KYC submission creates a separate 32-byte key at `backend\sto
 
 The setup script applies `db\schema.sql`, adds missing employee profile fields to an existing schema without deleting data, and creates the initial Sub Editor account. Joining dates are stored with salary records and are set in Salary Setup. Existing `users.joining_date` columns are left untouched for data safety, but are no longer read or written. Set the same `DB_*` values in the shell that runs the API.
 
+Unlock-sale customer lookup uses a separate, read-only MySQL connection to Arowin Global's `node_registrations` table. Add these settings to the ignored `backend\.env` file (use a read-only database account outside local development):
+
+```ini
+AROWIN_GLOBAL_DB_HOST=127.0.0.1
+AROWIN_GLOBAL_DB_PORT=3306
+AROWIN_GLOBAL_DB_NAME=arowin
+AROWIN_GLOBAL_DB_USER=your-read-only-user
+AROWIN_GLOBAL_DB_PASSWORD=your-local-password
+```
+
+The customer ID is matched against `username`. Active records with a `purchased_package` return the customer details; if the ID exists but is pending or has no activated package, the form asks the employee to have the customer purchase a package first. Rejected records are reported as inactive. Keep database credentials out of source control and chat.
+
 To apply additive schema updates to an already initialized database without reseeding or changing accounts, run `C:\xampp\php\php.exe backend\api\setup.php --schema-only` from the repository root. This mode requires an existing active Sub Editor account.
+
+Run this migration before using Emergency Sales progress or submissions; it adds the employee-credit and emergency-assignment linkage columns used to calculate completion and unlock My Unlock Sales.
 
 Do not copy the placeholder above literally or generate a replacement on each run. After setup, start the API from that same PowerShell window so its environment settings are available:
 
@@ -112,9 +126,9 @@ The frontend defaults to port `8000` on the same host. Override it with `VITE_AP
 - In **Target Setup → Team Assignment**, Sub Editors can assign each active Telecaller to one Team Leader, see the remaining unassigned Telecaller count beside **Assign**, and view each leader’s team and assigned-member count. The available count updates after an assignment. Assigned Telecallers and assignment activity appear in that Team Leader's dashboard. Team assignment data is stored in MySQL.
 - In **Target Setup → Sales Target Setup**, Sub Editors can save a monthly USDT target for each active Team Leader. Saving or updating a target requires confirming the Sub Editor's current password; the API verifies it against the stored password hash. Targets are unique per leader and month, appear on the Team Leader dashboard for the active month, and each leader's **View** history shows the saved amount and latest update date/time for the last 12 months.
 - The Team Leader dashboard and Telecaller sales trend show approved package sales only. Team Leader totals aggregate approved sales from currently assigned Telecallers and compare them with that leader's selected monthly target; Telecallers can review their personal approved sales without an individual target. Daily, weekly, and monthly charts show progress bands (red below 33%, yellow from 33% through 66%, green above 66%) and a 50% break-even marker.
-- The Sub Editor **Total Sales**, **This Week's Sales**, and **Last Month's Sales** pages summarize approved unlock package sales in USDT from Telecallers and Team Leaders. Total Sales includes all approved entries through today; This Week uses Monday through today in Asia/Kolkata; Last Month uses the previous calendar month. Each page shows the overall total and a per-employee breakdown. Pending requests are shown separately in **Total Sales** and are not included in approved sales totals.
-- Sub Editors configure attendance on-time bonuses, daily activity amounts by platform and a daily activity bonus limit, and the USDT incentive for each supported unlock package in **Settings**. Attendance bonuses apply to check-ins by 9:30 AM. Each approved daily activity earns its saved platform amount once, up to the configured per-employee daily limit; updated rates affect future approvals. Package incentives are recorded on sales when approved. Once the Arowin Global lookup is connected, Telecallers and Team Leaders can find a customer by ID, see the verified customer name and activated package, and submit that purchase for Sub Editor review. Approval records the configured incentive against the employee's sale; it appears in the submitter's **My Incentives** page and approved team sales appear in **Our Team Achievers** as the employee's name and an achievement only. Customer IDs, customer names, and package details are not shown to teammates. Until the Arowin Global API/data source is configured, lookup and sale submission are unavailable and manually selected/unverified packages cannot be submitted.
-- **My Unlock Sales → Lookup Customer** is available for Telecallers and Team Leaders. It will use the Arowin Global customer data source after that API is configured. Do not enter or credit package sales manually before the lookup is enabled.
+- The Sub Editor **Total Sales**, **This Week's Sales**, and **Last Month's Sales** pages summarize approved regular unlock package sales (excluding Emergency Sales) in USDT from Telecallers and Team Leaders. Total Sales includes all approved entries through today; This Week uses Monday through today in Asia/Kolkata; Last Month uses the previous calendar month. Each page shows the overall total and a per-employee breakdown. Pending regular unlock requests are handled separately in **Unlock Sales Review**.
+- Sub Editors configure attendance on-time bonuses, daily activity amounts by platform and a daily activity bonus limit, and the USDT incentive for each supported unlock package in **Settings**. Attendance bonuses apply to check-ins by 9:30 AM. Each approved daily activity earns its saved platform amount once, up to the configured per-employee daily limit; updated rates affect future approvals. Package incentives are recorded on sales when approved. Telecallers and Team Leaders can look up an active Arowin Global customer by ID, see the verified customer name and activated package, and submit that purchase for Sub Editor review. Approval records the configured incentive against the employee's sale; it appears in the submitter's **My Incentives** page and approved team sales appear in **Our Team Achievers** as the employee's name and an achievement only. Customer IDs, customer names, and package details are not shown to teammates. Customer lookups use the configured read-only connection to `node_registrations`; manually selected or unverified packages cannot be submitted.
+- **My Unlock Sales → Lookup Customer** is available for Telecallers and Team Leaders. Entering a customer ID automatically looks up the active customer name and `purchased_package` in Arowin Global. Email OTP verification is required before submitting the verified package for Sub Editor review. Customer identifiers and names are not shown in team achievements.
 - Team Leader assignment notifications appear in the notification menu, with a month-filtered 12-month activity history on the dashboard. History includes employee ID, employee name, and assignment date.
 - Team member joining dates use the configured salary record, falling back to a legacy `users.joining_date` column when present.
 - Employee profiles contain a name, unique email, role, mobile number, date of birth, address, active status, and a password hash. Joining date is configured alongside salary in Salary Setup; employees without one display **Not recorded**.
@@ -181,9 +195,10 @@ Approved leave is unpaid: each elapsed approved working day without a completed 
 - `GET /api/sales/summary?period=total|this_week|last_month` (Sub Editor session; total and per-employee approved sales)
 - `GET /api/sales/packages` (Sub Editor, Team Leader, or Telecaller session; supported package amounts and configured incentives)
 - `POST /api/sales/packages/incentives` (Sub Editor session; configure USDT incentives for all supported packages)
-- `POST /api/sales/unlocks` (Team Leader or Telecaller session; currently blocked until a verified Arowin Global customer package lookup is configured)
+- `POST /api/sales/unlocks` (Team Leader or Telecaller session with verified email OTP; rechecks the active Arowin Global customer and submits its package for review)
 - `GET /api/sales/unlocks/me` (Team Leader or Telecaller session; own submitted sales and earned incentive total)
-- `GET /api/sales/unlocks?status=pending|approved|rejected|all` (Sub Editor session; sale requests and status totals)
+- `POST /api/sales/unlocks/customer` (Team Leader or Telecaller session; look up an active Arowin Global customer by `username`)
+- `GET /api/sales/unlocks?status=pending|approved|rejected|all&type=regular|emergency|all` (Sub Editor session; filtered sale requests and status totals)
 - `POST /api/sales/unlocks/{saleId}/review` (Sub Editor session; approve or reject a pending sale, with a reason required for rejection)
 - `GET /api/sales/incentives/me` (Team Leader or Telecaller session; approved personal incentives)
 - `GET /api/sales/team-achievements` (Team Leader or Telecaller session; assigned team's approved sale achievements, employee names only)

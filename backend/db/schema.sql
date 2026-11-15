@@ -409,6 +409,8 @@ CREATE TABLE IF NOT EXISTS unlock_sales (
     telecaller_id BIGINT UNSIGNED NOT NULL,
     customer_reference VARCHAR(80) NOT NULL,
     package_amount DECIMAL(10, 2) NOT NULL,
+    is_employee_credited TINYINT(1) NOT NULL DEFAULT 1,
+    emergency_assignment_id BIGINT UNSIGNED NULL,
     status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
     incentive_amount DECIMAL(10, 2) NULL,
     rejection_reason VARCHAR(500) NULL,
@@ -418,9 +420,61 @@ CREATE TABLE IF NOT EXISTS unlock_sales (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_unlock_sales_status_date (status, sold_on),
     INDEX idx_unlock_sales_telecaller_date (telecaller_id, sold_on),
+    INDEX idx_unlock_sales_emergency_assignment_status (emergency_assignment_id, status),
     CONSTRAINT fk_unlock_sale_telecaller FOREIGN KEY (telecaller_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_unlock_sale_package FOREIGN KEY (package_amount) REFERENCES unlock_package_incentives(package_amount),
     CONSTRAINT fk_unlock_sale_reviewer FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS emergency_sales_assignments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    employee_id BIGINT UNSIGNED NOT NULL,
+    package_amount DECIMAL(10, 2) NOT NULL,
+    expires_at DATE NOT NULL,
+    note VARCHAR(500) NOT NULL DEFAULT '',
+    assigned_by BIGINT UNSIGNED,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_emergency_sales_employee_expiry (employee_id, expires_at),
+    INDEX idx_emergency_sales_expiry (expires_at),
+    CONSTRAINT fk_emergency_sales_employee FOREIGN KEY (employee_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_emergency_sales_assigner FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS employee_incentive_payouts (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    employee_id BIGINT UNSIGNED NOT NULL,
+    payout_month DATE NOT NULL,
+    amount DECIMAL(14, 2) NOT NULL,
+    paid_by BIGINT UNSIGNED,
+    paid_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_employee_incentive_payout_month (employee_id, payout_month),
+    INDEX idx_employee_incentive_payout_month (payout_month),
+    CONSTRAINT fk_employee_incentive_payout_employee FOREIGN KEY (employee_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_employee_incentive_payout_payer FOREIGN KEY (paid_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS notification_trigger_settings (
+    event_key VARCHAR(60) PRIMARY KEY,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    configured_by BIGINT UNSIGNED,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_notification_trigger_configurer FOREIGN KEY (configured_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+INSERT IGNORE INTO notification_trigger_settings (event_key, enabled) VALUES
+    ('new_sales_awaiting_review', 1),
+    ('sales_approved_or_rejected', 1),
+    ('leave_requests', 1),
+    ('daily_activity_submissions', 1),
+    ('support_tickets', 1);
+
+CREATE TABLE IF NOT EXISTS notification_reads (
+    user_id BIGINT UNSIGNED NOT NULL,
+    event_key VARCHAR(60) NOT NULL,
+    entity_id BIGINT UNSIGNED NOT NULL,
+    read_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, event_key, entity_id),
+    CONSTRAINT fk_notification_read_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS role_permissions (

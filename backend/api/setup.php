@@ -85,6 +85,58 @@ try {
          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name'
     );
 
+    $columnCheck->execute(['table_name' => 'unlock_sales', 'column_name' => 'is_employee_credited']);
+    if ((int) $columnCheck->fetchColumn() === 0) {
+        $connection->exec(
+            'ALTER TABLE unlock_sales
+             ADD COLUMN is_employee_credited TINYINT(1) NOT NULL DEFAULT 1 AFTER package_amount'
+        );
+    }
+
+    $columnCheck->execute(['table_name' => 'unlock_sales', 'column_name' => 'emergency_assignment_id']);
+    if ((int) $columnCheck->fetchColumn() === 0) {
+        $connection->exec(
+            'ALTER TABLE unlock_sales ADD COLUMN emergency_assignment_id BIGINT UNSIGNED NULL AFTER is_employee_credited'
+        );
+    }
+
+    $emergencySalesIndex = $connection->prepare(
+        'SELECT COUNT(*) FROM information_schema.STATISTICS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table_name
+           AND INDEX_NAME = :index_name'
+    );
+    $emergencySalesIndex->execute([
+        'table_name' => 'unlock_sales',
+        'index_name' => 'idx_unlock_sales_emergency_assignment_status',
+    ]);
+    if ((int) $emergencySalesIndex->fetchColumn() === 0) {
+        $connection->exec(
+            'ALTER TABLE unlock_sales ADD INDEX idx_unlock_sales_emergency_assignment_status (emergency_assignment_id, status)'
+        );
+    }
+
+    $columnCheck->execute(['table_name' => 'emergency_sales_assignments', 'column_name' => 'note']);
+    if ((int) $columnCheck->fetchColumn() === 0) {
+        $connection->exec(
+            "ALTER TABLE emergency_sales_assignments ADD COLUMN note VARCHAR(500) NOT NULL DEFAULT '' AFTER expires_at"
+        );
+    }
+
+    $emergencyPackageConstraint = $connection->prepare(
+        'SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS
+         WHERE CONSTRAINT_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table_name
+           AND CONSTRAINT_NAME = :constraint_name'
+    );
+    $emergencyPackageConstraint->execute([
+        'table_name' => 'emergency_sales_assignments',
+        'constraint_name' => 'fk_emergency_sales_package',
+    ]);
+    if ((int) $emergencyPackageConstraint->fetchColumn() > 0) {
+        $connection->exec('ALTER TABLE emergency_sales_assignments DROP FOREIGN KEY fk_emergency_sales_package');
+    }
+
     foreach ($columns as $column => $definition) {
         $columnCheck->execute(['table_name' => 'users', 'column_name' => $column]);
         if ((int) $columnCheck->fetchColumn() === 0) {

@@ -329,6 +329,7 @@ final class SalesController
                 'emergencyAssignment' => null,
                 'pendingSales' => ['count' => 0, 'amount' => '0.00'],
                 'approvedSales' => ['count' => 0, 'amount' => '0.00'],
+                'rejectedSales' => ['count' => 0, 'amount' => '0.00'],
                 'emergencySales' => [],
                 'approvedEmergencySalesAmount' => '0.00',
                 'remainingEmergencySalesAmount' => null,
@@ -342,7 +343,9 @@ final class SalesController
                 COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) AS pending_count,
                 COALESCE(SUM(CASE WHEN status = 'pending' THEN package_amount ELSE 0 END), 0.00) AS pending_amount,
                 COALESCE(SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END), 0) AS approved_count,
-                COALESCE(SUM(CASE WHEN status = 'approved' THEN package_amount ELSE 0 END), 0.00) AS approved_amount
+                COALESCE(SUM(CASE WHEN status = 'approved' THEN package_amount ELSE 0 END), 0.00) AS approved_amount,
+                COALESCE(SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END), 0) AS rejected_count,
+                COALESCE(SUM(CASE WHEN status = 'rejected' THEN package_amount ELSE 0 END), 0.00) AS rejected_amount
              FROM unlock_sales
              WHERE emergency_assignment_id = :assignment_id
                AND telecaller_id = :employee_id
@@ -389,6 +392,10 @@ final class SalesController
             'approvedSales' => [
                 'count' => (int) $summary['approved_count'],
                 'amount' => ValueFormatter::formatAmount((string) $summary['approved_amount']),
+            ],
+            'rejectedSales' => [
+                'count' => (int) $summary['rejected_count'],
+                'amount' => ValueFormatter::formatAmount((string) $summary['rejected_amount']),
             ],
             'emergencySales' => array_map(static fn (array $row): array => [
                 'id' => (int) $row['id'],
@@ -1502,24 +1509,38 @@ final class SalesController
         ];
     }
 
-    public function employeeIncentives(int $employeeId): array
+    public function employeeIncentives(int $employeeId, ?string $month = null): array
     {
+        $monthFilter = '';
+        $params = ['telecaller_id' => $employeeId];
+        if ($month !== null) {
+            $monthStart = ValueFormatter::normalizeMonth($month, 'Choose a valid incentive month.');
+            $nextMonthStart = (new DateTimeImmutable($monthStart))
+                ->modify('first day of next month')
+                ->format('Y-m-d');
+            $monthFilter = ' AND reviewed_at >= :month_start AND reviewed_at < :next_month_start';
+            $params['month_start'] = $monthStart;
+            $params['next_month_start'] = $nextMonthStart;
+        }
+
         $statement = $this->database->prepare(
             "SELECT id, customer_reference, package_amount, incentive_amount, sold_on, reviewed_at
              FROM unlock_sales
-            WHERE telecaller_id = :telecaller_id AND status = 'approved'
-              AND is_employee_credited = 1 AND emergency_assignment_id IS NULL
-             ORDER BY reviewed_at DESC, id DESC
-             LIMIT 500"
+             WHERE telecaller_id = :telecaller_id AND status = 'approved'
+               AND is_employee_credited = 1 AND emergency_assignment_id IS NULL
+               {$monthFilter}
+             ORDER BY reviewed_at DESC, id DESC"
+             . ($month === null ? ' LIMIT 500' : '')
         );
-        $statement->execute(['telecaller_id' => $employeeId]);
+        $statement->execute($params);
         $earnedQuery = $this->database->prepare(
             "SELECT COALESCE(SUM(incentive_amount), 0.00)
              FROM unlock_sales
-            WHERE telecaller_id = :telecaller_id AND status = 'approved'
-              AND is_employee_credited = 1 AND emergency_assignment_id IS NULL"
+             WHERE telecaller_id = :telecaller_id AND status = 'approved'
+               AND is_employee_credited = 1 AND emergency_assignment_id IS NULL
+               {$monthFilter}"
         );
-        $earnedQuery->execute(['telecaller_id' => $employeeId]);
+        $earnedQuery->execute($params);
 
         return [
             'totalEarned' => (string) $earnedQuery->fetchColumn(),

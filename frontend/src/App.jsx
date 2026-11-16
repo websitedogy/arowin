@@ -5,6 +5,7 @@ import LoginPage from './features/auth/LoginPage'
 import CredentialsDownloadPage from './features/auth/CredentialsDownloadPage'
 import SubEditorDashboard from './features/dashboard/SubEditorDashboard'
 import FeatureDetailPage from './features/dashboard/FeatureDetailPage'
+import StateAssignmentPage from './features/dashboard/StateAssignmentPage'
 import { subEditorFeatureByPath } from './features/dashboard/subEditorFeatures'
 import SubEditorLayout from './features/dashboard/SubEditorLayout'
 import RoleDashboard from './features/dashboard/RoleDashboard'
@@ -168,6 +169,10 @@ function App() {
 
           if (currentPath === '/leads') {
             return <AllLeadsPage />
+          }
+
+          if (currentPath === '/state-assignments') {
+            return <StateAssignmentPage />
           }
 
           if (currentPath.startsWith('/targets')) {

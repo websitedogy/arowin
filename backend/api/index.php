@@ -17,6 +17,8 @@ use Arowin\Modules\Employees\EmployeeKycController;
 use Arowin\Modules\Leave\LeaveController;
 use Arowin\Modules\Leads\LeadController;
 use Arowin\Modules\TeamAssignments\TeamAssignmentController;
+use Arowin\Modules\TeamAssignments\TeamStateAssignmentController;
+use Arowin\Modules\Territories\IndiaTerritories;
 use Arowin\Modules\Targets\SalesTargetController;
 use Arowin\Modules\Sales\SalesController;
 use Arowin\Modules\Sales\GlobalCustomerLookup;
@@ -39,7 +41,7 @@ if (in_array($requestOrigin, $allowedOrigins, true)) {
 
 header('Access-Control-Allow-Headers: Content-Type, X-Arowin-Session');
 header('Access-Control-Expose-Headers: X-Arowin-Session');
-header('Access-Control-Allow-Methods: DELETE, GET, POST, OPTIONS');
+header('Access-Control-Allow-Methods: DELETE, GET, PATCH, POST, OPTIONS');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
@@ -117,6 +119,11 @@ try {
 
         $_SESSION['user'] = $user;
         jsonResponse(['success' => true, 'user' => $_SESSION['user']]);
+    }
+
+    if ($path === '/api/territories' && $method === 'GET') {
+        requireAuthenticated();
+        jsonResponse(['success' => true, 'states' => IndiaTerritories::all()]);
     }
 
     if ($path === '/api/employee-kyc' && in_array($method, ['GET', 'POST'], true)) {
@@ -549,6 +556,24 @@ try {
         jsonResponse(['success' => true, 'teamLeaders' => $assignments->listTeamLeaders()]);
     }
 
+    if ($path === '/api/state-assignments' && $method === 'GET') {
+        requireSubEditor();
+        $assignments = new TeamStateAssignmentController(Database::connect());
+        jsonResponse(['success' => true, 'teamLeaders' => $assignments->listTeamLeaders()]);
+    }
+
+    if ($path === '/api/state-assignments' && $method === 'POST') {
+        requireSubEditor();
+        $payload = parseJsonBody();
+        $assignments = new TeamStateAssignmentController(Database::connect());
+        $assignments->assignState(
+            (int) ($payload['teamLeaderId'] ?? 0),
+            (string) ($payload['stateCode'] ?? ''),
+            (int) $_SESSION['user']['id']
+        );
+        jsonResponse(['success' => true, 'message' => 'State assigned to the Team Leader.'], 201);
+    }
+
     if ($path === '/api/sales-targets' && $method === 'GET') {
         requireSubEditor();
         $targets = new SalesTargetController(Database::connect());
@@ -847,7 +872,10 @@ try {
         $sales = new SalesController(Database::connect());
         jsonResponse([
             'success' => true,
-            'result' => $sales->employeeIncentives((int) $_SESSION['user']['id']),
+            'result' => $sales->employeeIncentives(
+                (int) $_SESSION['user']['id'],
+                isset($_GET['month']) && is_string($_GET['month']) ? $_GET['month'] : null
+            ),
         ]);
     }
 
@@ -1027,6 +1055,83 @@ try {
 
         $team = (new TeamAssignmentController(Database::connect()))->teamDashboard((int) $_SESSION['user']['id']);
         jsonResponse(['success' => true, 'team' => $team]);
+    }
+
+    if ($path === '/api/team-leader/states' && $method === 'GET') {
+        requireAuthenticated();
+        if ($_SESSION['user']['role'] !== 'team_leader') {
+            jsonResponse(['success' => false, 'message' => 'Only Team Leaders can view their assigned states.'], 403);
+        }
+
+        $states = (new TeamStateAssignmentController(Database::connect()))
+            ->listAssignedStates((int) $_SESSION['user']['id']);
+        jsonResponse(['success' => true, 'states' => $states]);
+    }
+
+    if ($path === '/api/team-leader/state-districts' && $method === 'GET') {
+        requireAuthenticated();
+        if ($_SESSION['user']['role'] !== 'team_leader') {
+            jsonResponse(['success' => false, 'message' => 'Only Team Leaders can view their assigned districts.'], 403);
+        }
+
+        $districts = (new TeamStateAssignmentController(Database::connect()))
+            ->listAssignedDistricts((int) $_SESSION['user']['id']);
+        jsonResponse(['success' => true, 'districts' => $districts]);
+    }
+
+    if (
+        is_string($path)
+        && preg_match('#^/api/team-leader/states/([A-Z]{2})/leads$#', $path, $matches)
+        && $method === 'GET'
+    ) {
+        requireAuthenticated();
+        if ($_SESSION['user']['role'] !== 'team_leader') {
+            jsonResponse(['success' => false, 'message' => 'Only Team Leaders can view assigned state leads.'], 403);
+        }
+
+        $result = (new TeamStateAssignmentController(Database::connect()))->listLeadsForDistrict(
+            (int) $_SESSION['user']['id'],
+            $matches[1],
+            (string) ($_GET['district'] ?? '')
+        );
+        jsonResponse(['success' => true] + $result);
+    }
+
+    if (
+        is_string($path)
+        && preg_match('#^/api/team-leader/states/([A-Z]{2})/leads$#', $path, $matches)
+        && $method === 'POST'
+    ) {
+        requireAuthenticated();
+        if ($_SESSION['user']['role'] !== 'team_leader') {
+            jsonResponse(['success' => false, 'message' => 'Only Team Leaders can add assigned state leads.'], 403);
+        }
+
+        $lead = (new TeamStateAssignmentController(Database::connect()))->createLeadForDistrict(
+            (int) $_SESSION['user']['id'],
+            $matches[1],
+            parseJsonBody()
+        );
+        jsonResponse(['success' => true, 'lead' => $lead], 201);
+    }
+
+    if (
+        is_string($path)
+        && preg_match('#^/api/team-leader/leads/([1-9][0-9]*)/status$#', $path, $matches)
+        && $method === 'PATCH'
+    ) {
+        requireAuthenticated();
+        if ($_SESSION['user']['role'] !== 'team_leader') {
+            jsonResponse(['success' => false, 'message' => 'Only Team Leaders can update assigned state leads.'], 403);
+        }
+
+        $payload = parseJsonBody();
+        $lead = (new TeamStateAssignmentController(Database::connect()))->updateLeadStatus(
+            (int) $_SESSION['user']['id'],
+            (int) $matches[1],
+            (string) ($payload['status'] ?? '')
+        );
+        jsonResponse(['success' => true, 'lead' => $lead]);
     }
 
     if (is_string($path) && preg_match('#^/api/employees/([1-9][0-9]*)/credentials/resend$#', $path, $matches) && $method === 'POST') {

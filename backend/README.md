@@ -130,6 +130,7 @@ The frontend defaults to port `8000` on the same host. Override it with `VITE_AP
 - Sub Editors configure attendance on-time bonuses, daily activity amounts by platform and a daily activity bonus limit, and the USDT incentive for each supported unlock package in **Settings**. Attendance bonuses apply to check-ins by 9:30 AM. Each approved daily activity earns its saved platform amount once, up to the configured per-employee daily limit; updated rates affect future approvals. Package incentives are recorded on sales when approved. Telecallers and Team Leaders can look up an active Arowin Global customer by ID, see the verified customer name and activated package, and submit that purchase for Sub Editor review. Approval records the configured incentive against the employee's sale; it appears in the submitter's **My Incentives** page and approved team sales appear in **Our Team Achievers** as the employee's name and an achievement only. Customer IDs, customer names, and package details are not shown to teammates. Customer lookups use the configured read-only connection to `node_registrations`; manually selected or unverified packages cannot be submitted.
 - **My Unlock Sales → Lookup Customer** is available for Telecallers and Team Leaders. Entering a customer ID automatically looks up the active customer name and `purchased_package` in Arowin Global. Email OTP verification is required before submitting the verified package for Sub Editor review. Customer identifiers and names are not shown in team achievements.
 - Team Leader assignment notifications appear in the notification menu, with a month-filtered 12-month activity history on the dashboard. History includes employee ID, employee name, and assignment date.
+- Team Leaders can add and manage lead entries for every district in their assigned states. The district table shows the latest entry per district; opening **Lead Entry** shows all entries and the **All Leads**, **Taken Employees**, **Direct Sellers**, and **Not Interested** filters. New entries receive a generated six-digit Employee ID and begin with `new` status; their status can be changed from the district lead page.
 - Team member joining dates use the configured salary record, falling back to a legacy `users.joining_date` column when present.
 - Employee profiles contain a name, unique email, role, mobile number, date of birth, address, active status, and a password hash. Joining date is configured alongside salary in Salary Setup; employees without one display **Not recorded**.
 - Every account has a unique six-digit `employee_id`. The setup script assigns IDs to existing users once and enforces a unique database index; IDs are returned in employee, login, and credential-download responses.
@@ -165,8 +166,9 @@ API routes:
 - `GET /api/daily-activities` (own submissions for Team Leaders and Telecallers; all submissions for Sub Editors)
 - `GET /api/daily-activities/settings` (Sub Editor session; platform reward rates and per-employee daily bonus maximum)
 - `POST /api/daily-activities/settings` (Sub Editor session; save platform rates and daily maximum)
+- `GET /api/territories` (authenticated session; Indian states, union territories, and districts)
 - `GET /api/leads` (Telecaller session; own lead entries)
-- `POST /api/leads` (Telecaller session; create a lead with customer name, mobile, district, and optional note)
+- `POST /api/leads` (Telecaller session; create a lead with customer name, mobile, state, district, email, address, date of birth, gender, and optional note)
 - `POST /api/daily-activities` (Team Leader or Telecaller multipart form with `platform` and either 1–5 `screenshots[]` image files or 1–2 YouTube `videos[]` files)
 - `GET /api/daily-activities/{id}/screenshots/{screenshotId}` (private screenshot for its submitter or a Sub Editor)
 - `GET /api/daily-activities/{id}/videos/{videoId}` (private YouTube video for its submitter or a Sub Editor)
@@ -184,11 +186,18 @@ YouTube submissions accept one or two MP4 or WebM Shorts videos per activity (50
 Approved leave is unpaid: each elapsed approved working day without a completed attendance record is included in the employee's leave cut-off at the daily salary rate. Pending and rejected requests do not receive leave treatment; other unattended workdays remain unpaid as usual. Sundays and configured holidays remain paid. Approved leave appears in the attendance calendar and prevents a new check-in for that day.
 - `GET /api/dashboard/summary` (authenticated session)
 - `GET /api/team-assignments` (Sub Editor session)
+- `GET /api/state-assignments` (Sub Editor session; active Team Leaders and assigned states)
+- `POST /api/state-assignments` (Sub Editor session; JSON body includes `teamLeaderId` and `stateCode`; a state may be assigned to multiple Team Leaders)
 - `GET /api/team-assignments/{teamLeaderId}/available-telecallers` (Sub Editor session)
 - `GET /api/team-assignments/history` (Sub Editor session)
 - `GET /api/team-assignments/{teamLeaderId}/telecallers` (Sub Editor session)
 - `POST /api/team-assignments` (Sub Editor session)
 - `GET /api/team-leader/team` (Team Leader session)
+- `GET /api/team-leader/states` (Team Leader session; only that leader's assigned states and districts)
+- `GET /api/team-leader/state-districts` (Team Leader session; all districts in assigned states with the latest lead entry)
+- `GET /api/team-leader/states/{stateCode}/leads?district={district}` (Team Leader session; that leader's lead entries and status counts for an assigned district)
+- `POST /api/team-leader/states/{stateCode}/leads` (Team Leader session; JSON body includes `district`, `name`, `mobile`, `email`, `address`, `age`, and `gender`)
+- `PATCH /api/team-leader/leads/{leadId}/status` (Team Leader session; JSON body `status` is `new`, `taken_employee`, `direct_seller`, or `not_interested`)
 - `GET /api/sales-targets?month=YYYY-MM` (Sub Editor session)
 - `POST /api/sales-targets/{teamLeaderId}` (Sub Editor session; JSON body includes `month`, `targetAmount`, and the confirming Sub Editor `password`)
 - `GET /api/sales/performance?month=YYYY-MM` (Team Leader or Telecaller session)
@@ -200,7 +209,7 @@ Approved leave is unpaid: each elapsed approved working day without a completed 
 - `POST /api/sales/unlocks/customer` (Team Leader or Telecaller session; look up an active Arowin Global customer by `username`)
 - `GET /api/sales/unlocks?status=pending|approved|rejected|all&type=regular|emergency|all` (Sub Editor session; filtered sale requests and status totals)
 - `POST /api/sales/unlocks/{saleId}/review` (Sub Editor session; approve or reject a pending sale, with a reason required for rejection)
-- `GET /api/sales/incentives/me` (Team Leader or Telecaller session; approved personal incentives)
+- `GET /api/sales/incentives/me?month=YYYY-MM` (Team Leader or Telecaller session; approved personal incentives, optionally filtered by approval month)
 - `GET /api/sales/team-achievements` (Team Leader or Telecaller session; assigned team's approved sale achievements, employee names only)
 - `GET /api/sales/incentives/earned` (Sub Editor session; approved incentive totals and history)
 - `POST /api/sales/daily` (Telecaller session; saves or updates a date's total USDT sales)

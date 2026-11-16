@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { apiRequest } from '../../api'
 import formatDateTime from '../../utils/formatDateTime'
 import { formatCurrency, formatUsdt } from '../../utils/formatters'
+import { getExactPackageIdCount } from './packageTargetMath'
 import VerifiedSaleSubmissionModal from './VerifiedSaleSubmissionModal'
 
 const INR_PER_USDT = 100
 
-function OverviewCard({ label, value, detail, status }) {
+function OverviewCard({ label, value, detail, status, highlight = false }) {
   return (
-    <article className={`dashboard-panel emergency-sales-overview-card${status ? ` is-${status}` : ''}`}>
+    <article className={`dashboard-panel emergency-sales-overview-card${status ? ` is-${status}` : ''}${highlight ? ' is-highlighted' : ''}`}>
       <span>{label}</span>
       <strong>{value}</strong>
       {detail && <small>{detail}</small>}
@@ -27,6 +28,9 @@ function displayDate(value) {
 
 export default function EmergencySalesPage({ user, onOverviewChange }) {
   const [assignments, setAssignments] = useState([])
+  const [packages, setPackages] = useState([])
+  const [packageError, setPackageError] = useState('')
+  const [isLoadingPackages, setIsLoadingPackages] = useState(true)
   const [overview, setOverview] = useState(null)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -45,6 +49,24 @@ export default function EmergencySalesPage({ user, onOverviewChange }) {
       throw requestError
     }
   }, [onOverviewChange])
+
+  useEffect(() => {
+    let active = true
+    apiRequest('/sales/packages')
+      .then((result) => {
+        if (active) setPackages(result.packages)
+      })
+      .catch((requestError) => {
+        if (active) setPackageError(requestError.message)
+      })
+      .finally(() => {
+        if (active) setIsLoadingPackages(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -84,7 +106,7 @@ export default function EmergencySalesPage({ user, onOverviewChange }) {
         <div>
           <span className="mini-label">{user?.role === 'team_leader' ? 'Team Leader' : 'Telecaller'} Workspace</span>
           <h1>Emergency Sales</h1>
-          <p className="sub-editor-feature-description">Review your annual salary, emergency sales assignment, and pending or approved sales.</p>
+          <p className="sub-editor-feature-description">Review your annual scale, emergency sales assignment, and pending or approved sales.</p>
         </div>
         {overview?.canSubmitEmergencySale && (
           <button
@@ -93,7 +115,7 @@ export default function EmergencySalesPage({ user, onOverviewChange }) {
             onClick={() => setIsSubmissionOpen(true)}
           >
             <span aria-hidden="true">$</span>
-            Emergency Sales Done
+            Emergency Sales
           </button>
         )}
       </header>
@@ -101,14 +123,13 @@ export default function EmergencySalesPage({ user, onOverviewChange }) {
 
       <div className="emergency-sales-overview-grid" role="group" aria-label="Emergency sales overview">
         <OverviewCard
-          label="Annual Salary (INR)"
+          label="Annual Scale (INR)"
           value={overview
             ? annualSalaryInr === null ? 'Salary not set' : formatCurrency(annualSalaryInr)
             : unavailableValue}
-          detail={overview && annualSalaryInr !== null ? 'Monthly salary × 12' : undefined}
         />
         <OverviewCard
-          label="Annual Salary (USDT)"
+          label="Annual Scale (USDT)"
           value={overview
             ? annualSalaryInr === null ? 'Salary not set' : formatUsdt(annualSalaryInr / INR_PER_USDT)
             : unavailableValue}
@@ -125,6 +146,7 @@ export default function EmergencySalesPage({ user, onOverviewChange }) {
             ? formatUsdt(Number(currentAssignment.packageAmount))
             : isLoading || error ? unavailableValue : 'Not assigned'}
           detail={currentAssignment?.status === 'active' ? 'Current assignment' : currentAssignment ? 'Most recent assignment' : undefined}
+          highlight
         />
         <OverviewCard
           label="Pending Sales"
@@ -138,7 +160,57 @@ export default function EmergencySalesPage({ user, onOverviewChange }) {
           detail={overview ? `Total ${formatUsdt(overview.approvedSales.amount)}` : undefined}
           status="approved"
         />
+        <OverviewCard
+          label="Rejected Sales"
+          value={overview ? `${overview.rejectedSales.count} sales` : unavailableValue}
+          detail={overview ? `Total ${formatUsdt(overview.rejectedSales.amount)}` : undefined}
+          status="rejected"
+        />
       </div>
+
+      <section className="dashboard-panel emergency-package-count-panel" aria-labelledby="emergency-package-count-title">
+        <div className="emergency-package-count-heading">
+          <div>
+            <h2 id="emergency-package-count-title">Customer IDs by Package</h2>
+            <p>
+              {emergencyTargetAmount > 0
+                ? `Target: ${formatUsdt(emergencyTargetAmount)} · Counts are shown only when one package size matches the target exactly.`
+                : 'An emergency sales target is required to calculate package ID counts.'}
+            </p>
+          </div>
+        </div>
+        {packageError && <p className="dashboard-data-error" role="alert">Package options could not be loaded: {packageError}</p>}
+        {isLoadingPackages ? (
+          <p className="sub-editor-feature-empty" role="status">Loading package options…</p>
+        ) : packageError ? null : (
+          packages.length ? (
+            <div className="emergency-package-count-grid">
+              {packages.map((item) => {
+                const idCount = emergencyTargetAmount > 0
+                  ? getExactPackageIdCount(emergencyTargetAmount, item.packageAmount)
+                  : null
+
+                return (
+                  <article className={`emergency-package-count-card${idCount === null ? ' is-unavailable' : ''}`} key={item.packageAmount}>
+                    <span>{formatUsdt(item.packageAmount)} package</span>
+                    <strong>
+                      {emergencyTargetAmount <= 0
+                        ? 'Target not set'
+                        : idCount === null
+                          ? 'No exact match'
+                          : `${idCount} ${idCount === 1 ? 'ID' : 'IDs'}`}
+                    </strong>
+                    {idCount !== null && <small>Total: {formatUsdt(idCount * Number(item.packageAmount))}</small>}
+                    {emergencyTargetAmount > 0 && idCount === null && <small>Package amount does not divide the target evenly.</small>}
+                  </article>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="sub-editor-feature-empty" role="status">No package sizes are configured.</p>
+          )
+        )}
+      </section>
 
       {emergencyAssignment ? (
         <article className="dashboard-panel emergency-sales-progress-panel">

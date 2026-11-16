@@ -1,0 +1,17 @@
+India State and District Lookup Data
+
+The state and district names in india_states_districts.json are adapted from
+OpenStreetMap-derived district data distributed with vardhan-maps 0.19.0.
+The source is available at https://www.npmjs.com/package/vardhan-maps.
+
+The data subset has been modified: boundary geometry was omitted, duplicate
+names were removed, district names were sorted, Ladakh was limited to Kargil
+and Leh, and Mahe and Yanam were added for Puducherry.
+
+This adapted database is distributed under the Open Database License (ODbL)
+version 1.0: https://opendatacommons.org/licenses/odbl/1-0/.
+Source attribution: © OpenStreetMap contributors
+(https://www.openstreetmap.org/copyright).
+
+The dataset is provided for general location selection and is not an official
+or survey-grade administrative boundary source.

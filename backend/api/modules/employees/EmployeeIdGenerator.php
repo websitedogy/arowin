@@ -12,12 +12,18 @@ final class EmployeeIdGenerator
     public static function generate(PDO $database): string
     {
         $statement = $database->prepare(
-            'SELECT 1 FROM users WHERE employee_id = :employee_id LIMIT 1'
+            'SELECT 1 FROM users WHERE employee_id = :user_employee_id
+             UNION ALL
+             SELECT 1 FROM team_leader_leads WHERE employee_id = :lead_employee_id
+             LIMIT 1'
         );
 
         for ($attempt = 0; $attempt < 100; $attempt++) {
             $employeeId = (string) random_int(100000, 999999);
-            $statement->execute(['employee_id' => $employeeId]);
+            $statement->execute([
+                'user_employee_id' => $employeeId,
+                'lead_employee_id' => $employeeId,
+            ]);
             if ($statement->fetchColumn() === false) {
                 return $employeeId;
             }

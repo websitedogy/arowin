@@ -280,6 +280,17 @@ CREATE TABLE IF NOT EXISTS team_assignments (
     CONSTRAINT fk_team_assignment_creator FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS team_leader_state_assignments (
+    team_leader_id BIGINT UNSIGNED NOT NULL,
+    state_code CHAR(2) NOT NULL,
+    assigned_by BIGINT UNSIGNED,
+    assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (team_leader_id, state_code),
+    INDEX idx_team_leader_state_code (state_code),
+    CONSTRAINT fk_team_leader_state_leader FOREIGN KEY (team_leader_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_team_leader_state_assigner FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS team_leader_sales_targets (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     team_leader_id BIGINT UNSIGNED NOT NULL,
@@ -386,11 +397,42 @@ CREATE TABLE IF NOT EXISTS telecaller_leads (
     telecaller_id BIGINT UNSIGNED NOT NULL,
     customer_name VARCHAR(120) NOT NULL,
     mobile_number VARCHAR(25) NOT NULL,
+    state_code CHAR(2) NULL,
+    state_name VARCHAR(120) NULL,
     district VARCHAR(100) NOT NULL,
+    email VARCHAR(180) NOT NULL DEFAULT '',
+    address VARCHAR(500) NOT NULL DEFAULT '',
+    date_of_birth DATE NULL,
+    gender ENUM('male', 'female') NULL,
     note VARCHAR(500) NOT NULL DEFAULT '',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_telecaller_leads_owner_created (telecaller_id, created_at),
+    INDEX idx_telecaller_leads_state_district (state_code, district),
     CONSTRAINT fk_telecaller_lead_owner FOREIGN KEY (telecaller_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS team_leader_leads (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    team_leader_id BIGINT UNSIGNED NOT NULL,
+    employee_id CHAR(6) NOT NULL,
+    state_code CHAR(2) NOT NULL,
+    state_name VARCHAR(120) NOT NULL,
+    district VARCHAR(100) NOT NULL,
+    employee_name VARCHAR(120) NOT NULL,
+    mobile_number VARCHAR(25) NOT NULL,
+    email VARCHAR(180) NOT NULL,
+    address VARCHAR(500) NOT NULL,
+    age TINYINT UNSIGNED NOT NULL,
+    gender ENUM('male', 'female') NOT NULL,
+    status ENUM('new', 'taken_employee', 'direct_seller', 'not_interested') NOT NULL DEFAULT 'new',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_team_leader_lead_employee_id (employee_id),
+    INDEX idx_team_leader_leads_district (team_leader_id, state_code, district, id),
+    INDEX idx_team_leader_leads_status (team_leader_id, state_code, district, status),
+    CONSTRAINT fk_team_leader_lead_assignment
+        FOREIGN KEY (team_leader_id, state_code)
+        REFERENCES team_leader_state_assignments(team_leader_id, state_code)
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS unlock_package_incentives (

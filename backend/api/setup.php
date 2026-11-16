@@ -144,6 +144,37 @@ try {
         }
     }
 
+    $leadColumns = [
+        'state_code' => 'CHAR(2) NULL',
+        'state_name' => 'VARCHAR(120) NULL',
+        'email' => "VARCHAR(180) NOT NULL DEFAULT ''",
+        'address' => "VARCHAR(500) NOT NULL DEFAULT ''",
+        'date_of_birth' => 'DATE NULL',
+        'gender' => "ENUM('male', 'female') NULL",
+    ];
+    foreach ($leadColumns as $column => $definition) {
+        $columnCheck->execute(['table_name' => 'telecaller_leads', 'column_name' => $column]);
+        if ((int) $columnCheck->fetchColumn() === 0) {
+            $connection->exec(sprintf('ALTER TABLE telecaller_leads ADD COLUMN `%s` %s', $column, $definition));
+        }
+    }
+
+    $leadStateDistrictIndex = $connection->prepare(
+        'SELECT COUNT(*) FROM information_schema.STATISTICS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table_name
+           AND INDEX_NAME = :index_name'
+    );
+    $leadStateDistrictIndex->execute([
+        'table_name' => 'telecaller_leads',
+        'index_name' => 'idx_telecaller_leads_state_district',
+    ]);
+    if ((int) $leadStateDistrictIndex->fetchColumn() === 0) {
+        $connection->exec(
+            'ALTER TABLE telecaller_leads ADD INDEX idx_telecaller_leads_state_district (state_code, district)'
+        );
+    }
+
     $columnCheck->execute(['table_name' => 'attendance_records', 'column_name' => 'on_time_bonus']);
     if ((int) $columnCheck->fetchColumn() === 0) {
         $connection->exec(

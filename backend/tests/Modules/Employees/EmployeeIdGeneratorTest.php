@@ -12,6 +12,7 @@ final class EmployeeIdGeneratorTest extends TestCase
         $database = new PDO('sqlite::memory:');
         $database->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $database->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, employee_id TEXT UNIQUE)');
+        $database->exec('CREATE TABLE team_leader_leads (id INTEGER PRIMARY KEY, employee_id TEXT UNIQUE)');
 
         $generatedIds = [];
         for ($index = 0; $index < 25; $index++) {

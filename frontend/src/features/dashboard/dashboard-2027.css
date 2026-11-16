@@ -1030,8 +1030,14 @@
 .employee-income-view {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
   animation: cardEntrance 0.35s ease both;
+}
+
+.role-dashboard-leader .role-dashboard-content.income-dashboard-content,
+.telecaller-workspace-shell .role-dashboard-content.income-dashboard-content {
+  width: min(1540px, 100%);
+  max-width: 1540px;
 }
 
 .income-page-header {
@@ -1039,14 +1045,14 @@
   align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 12px;
 }
 
 .income-role-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
+  padding: 4px 10px;
   border-radius: 20px;
   background: linear-gradient(135deg, #e0e7ff, #ede9fe);
   color: #4338ca;
@@ -1054,7 +1060,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .income-page-header h1 {
@@ -1074,15 +1080,15 @@
 .income-header-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .income-month-selector {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
-  border-radius: 12px;
+  padding: 7px 11px;
+  border-radius: 10px;
   background: #fff;
   border: 1px solid #cbd5e1;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
@@ -1102,8 +1108,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 16px;
-  border-radius: 12px;
+  padding: 8px 13px;
+  border-radius: 10px;
   background: #fff;
   border: 1px solid #cbd5e1;
   color: #334155;
@@ -1458,6 +1464,227 @@
   background: #f8fafc;
 }
 
+.income-daily-panel {
+  overflow: hidden;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+}
+
+.income-daily-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.income-daily-eyebrow {
+  color: #2563eb;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+}
+
+.income-daily-heading h2 {
+  margin: 3px 0 0;
+  color: #0f172a;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.income-daily-heading p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.income-daily-table-wrap {
+  max-height: 72vh;
+  overflow: auto;
+  outline-offset: -3px;
+}
+
+.income-daily-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.income-daily-scroll-hint {
+  display: none;
+}
+
+.income-daily-table th,
+.income-daily-table td {
+  min-width: 76px;
+  padding: 8px 6px;
+  border-bottom: 1px solid #eaf0f8;
+  border-right: 1px solid #f1f5f9;
+  color: #334155;
+  font-size: 0.75rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.income-daily-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #f1f6ff;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.income-daily-table .income-daily-day {
+  min-width: 64px;
+  text-align: center;
+}
+
+.income-daily-day span,
+.income-daily-day small {
+  display: block;
+}
+
+.income-daily-day span {
+  color: #0f172a;
+  font-size: 0.83rem;
+}
+
+.income-daily-day small {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+}
+
+.income-daily-table .income-daily-category {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 184px;
+  background: #fff;
+  text-align: left;
+}
+
+.income-daily-table thead .income-daily-category {
+  z-index: 4;
+  background: #f1f6ff;
+}
+
+.income-daily-category span,
+.income-daily-category small {
+  display: block;
+}
+
+.income-daily-category span {
+  color: #1e293b;
+  font-weight: 750;
+}
+
+.income-daily-category small {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 0.64rem;
+}
+
+.income-daily-table .income-daily-total {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  min-width: 104px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.income-daily-table thead .income-daily-total {
+  z-index: 4;
+  background: #e7efff;
+}
+
+.income-daily-table tbody tr:hover td,
+.income-daily-table tbody tr:hover .income-daily-category,
+.income-daily-table tbody tr:hover .income-daily-total {
+  background: #f5f9ff;
+}
+
+.income-currency-totals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 16px 16px;
+}
+
+.income-currency-totals article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.income-currency-totals span {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.income-currency-totals strong {
+  color: #1d4ed8;
+  font-size: 0.98rem;
+  font-weight: 850;
+}
+
+.income-daily-message {
+  margin: 0;
+  padding: 28px 24px;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+@media (min-width: 1280px) {
+  .income-daily-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .income-daily-table th,
+  .income-daily-table td {
+    min-width: 0;
+    padding: 9px 2px;
+    font-size: clamp(0.58rem, 0.66vw, 0.64rem);
+  }
+
+  .income-daily-table .income-daily-category {
+    width: 172px;
+    min-width: 172px;
+  }
+
+  .income-daily-table .income-daily-day {
+    min-width: 0;
+  }
+
+  .income-daily-table .income-daily-total {
+    width: 100px;
+    min-width: 100px;
+  }
+
+  .income-daily-amount {
+    display: inline-block;
+    transform: scaleX(0.88);
+  }
+}
+
 .time-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.8rem;
@@ -1701,7 +1928,9 @@
 }
 
 .quick-lead-modal-card {
-  width: min(500px, 100%);
+  width: min(680px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
   border-radius: 24px;
   background: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.9);
@@ -1997,6 +2226,131 @@ body,
 }
 
 @media (max-width: 768px) {
+  .income-page-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .income-header-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .income-month-selector {
+    min-width: 0;
+    width: 100%;
+    padding: 7px 9px;
+  }
+
+  .income-month-selector select {
+    min-width: 0;
+    width: 100%;
+    text-overflow: ellipsis;
+  }
+
+  .income-page-header p {
+    max-width: 38rem;
+    line-height: 1.5;
+  }
+
+  .income-daily-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  .income-daily-heading p {
+    line-height: 1.5;
+  }
+
+  .income-daily-scroll-hint {
+    display: block;
+    margin: 0;
+    padding: 0 12px 8px;
+    color: #64748b;
+    font-size: 0.68rem;
+  }
+
+  .income-daily-table-wrap {
+    display: block;
+    max-height: 68vh;
+    overflow: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .income-daily-table {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+  }
+
+  .income-daily-table th,
+  .income-daily-table td {
+    min-width: 46px;
+    padding: 7px 2px;
+    font-size: 0.62rem;
+  }
+
+  .income-daily-table .income-daily-category {
+    width: 140px;
+    min-width: 140px;
+    max-width: 140px;
+    padding-right: 6px;
+    padding-left: 8px;
+    white-space: normal;
+  }
+
+  .income-daily-table .income-daily-day {
+    width: 46px;
+    min-width: 46px;
+    padding-right: 2px;
+    padding-left: 2px;
+  }
+
+  .income-daily-day span {
+    font-size: 0.72rem;
+  }
+
+  .income-daily-day small {
+    display: none;
+  }
+
+  .income-daily-table tbody td:not(.income-daily-total) {
+    width: 46px;
+    min-width: 46px;
+    padding-right: 2px;
+    padding-left: 2px;
+    text-align: center;
+  }
+
+  .income-daily-amount {
+    transform: none;
+    font-size: 0.6rem;
+    letter-spacing: -0.02em;
+  }
+
+  .income-daily-table .income-daily-total {
+    width: 100px;
+    min-width: 100px;
+    padding-right: 8px;
+    padding-left: 8px;
+    display: none;
+  }
+
+  .income-currency-totals {
+    grid-template-columns: 1fr;
+    padding: 8px 10px 10px;
+  }
+
+  .income-currency-totals article {
+    padding: 9px 10px;
+  }
+
   .team-heading-top-row {
     flex-direction: column !important;
     align-items: flex-start !important;

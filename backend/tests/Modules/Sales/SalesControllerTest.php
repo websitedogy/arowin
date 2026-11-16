@@ -227,6 +227,7 @@ final class SalesControllerTest extends TestCase
         foreach ([
             ['75.00', 1, null, 'pending', 'Emergency Pending'],
             ['150.00', 1, '10.00', 'approved', 'Emergency Approved'],
+            ['60.00', 1, null, 'rejected', 'Emergency Rejected'],
             ['99.00', 0, null, 'approved', 'Non-credited Customer'],
         ] as [$amount, $credited, $incentive, $status, $customer]) {
             $insert->execute([
@@ -245,6 +246,7 @@ final class SalesControllerTest extends TestCase
         $this->assertSame('30000.00', $overview['monthlySalaryInr']);
         $this->assertSame(['count' => 1, 'amount' => '75.00'], $overview['pendingSales']);
         $this->assertSame(['count' => 1, 'amount' => '150.00'], $overview['approvedSales']);
+        $this->assertSame(['count' => 1, 'amount' => '60.00'], $overview['rejectedSales']);
         $this->assertFalse($overview['unlockSalesUnlocked']);
         $this->assertSame('200.00', $overview['remainingEmergencySalesAmount']);
     }
@@ -281,6 +283,7 @@ final class SalesControllerTest extends TestCase
         $this->assertFalse($overview['canSubmitEmergencySale']);
         $this->assertSame(['count' => 0, 'amount' => '0.00'], $overview['pendingSales']);
         $this->assertSame(['count' => 0, 'amount' => '0.00'], $overview['approvedSales']);
+        $this->assertSame(['count' => 0, 'amount' => '0.00'], $overview['rejectedSales']);
     }
 
     public function testApprovedEmergencySalesUnlockOnlyAfterTheAssignedAmountIsReached(): void
@@ -678,6 +681,8 @@ final class SalesControllerTest extends TestCase
         self::assertEquals(5.0, (float) $employeeSales['earnedIncentives']);
         self::assertNull($emergencySale['incentiveAmount']);
         self::assertEquals(5.0, (float) $controller->employeeIncentives(2)['totalEarned']);
+        self::assertEquals(5.0, (float) $controller->employeeIncentives(2, '2025-01')['totalEarned']);
+        self::assertEquals(0.0, (float) $controller->employeeIncentives(2, '2025-02')['totalEarned']);
         $reviewSales = $controller->listUnlockSalesForReview('approved')['sales'];
         $emergencyReviewSale = array_values(array_filter(
             $reviewSales,

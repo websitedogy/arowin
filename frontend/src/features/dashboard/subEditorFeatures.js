@@ -10,6 +10,7 @@ export const subEditorFeatures = [
   { label: 'Granted Rewards', path: '/rewards/granted', countKey: 'granted_rewards', icon: 'users', tone: 'sales-purple', status: 'Team incentives granted' },
   { label: 'Notification Trigger', path: '/notifications', countKey: 'notification_trigger', icon: 'bell', tone: 'sales-orange', status: 'Enabled notification events' },
   { label: 'All Leads', path: '/leads', countKey: 'all_leads', icon: 'file', tone: 'sales-blue', status: 'Saved telecaller leads' },
+  { label: 'States Assign', path: '/state-assignments', icon: 'mapPin', tone: 'sales-green', status: 'Assign states to Team Leaders' },
 ]
 
 export const subEditorFeatureByPath = Object.fromEntries(

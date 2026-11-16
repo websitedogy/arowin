@@ -60,28 +60,38 @@ export default function AllLeadsPage() {
                 <th>Employee ID</th>
                 <th>Customer Name</th>
                 <th>Mobile Number</th>
+                <th>State</th>
                 <th>District</th>
+                <th>Email</th>
+                <th>Address</th>
+                <th>Age</th>
+                <th>Gender</th>
                 <th>Note</th>
                 <th>Added</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan="7" className="sub-editor-feature-empty">Loading leads…</td></tr>
+                <tr><td colSpan="12" className="sub-editor-feature-empty">Loading leads…</td></tr>
               ) : error ? (
-                <tr><td colSpan="7" className="sub-editor-feature-empty">Leads could not be loaded.</td></tr>
+                <tr><td colSpan="12" className="sub-editor-feature-empty">Leads could not be loaded.</td></tr>
               ) : leads.length ? leads.map((lead) => (
                 <tr key={lead.id}>
                   <td>{lead.employeeName}</td>
                   <td>{lead.employeeId}</td>
                   <td>{lead.customerName}</td>
                   <td>{lead.mobileNumber}</td>
+                  <td>{lead.stateName || '—'}</td>
                   <td>{lead.district}</td>
+                  <td>{lead.email || '—'}</td>
+                  <td>{lead.address || '—'}</td>
+                  <td>{lead.age ?? '—'}</td>
+                  <td>{lead.gender ? `${lead.gender[0].toUpperCase()}${lead.gender.slice(1)}` : '—'}</td>
                   <td>{lead.note || '—'}</td>
                   <td>{displayDate(lead.createdAt)}</td>
                 </tr>
               )) : (
-                <tr><td colSpan="7" className="sub-editor-feature-empty">No Telecaller leads have been entered yet.</td></tr>
+                <tr><td colSpan="12" className="sub-editor-feature-empty">No Telecaller leads have been entered yet.</td></tr>
               )}
             </tbody>
           </table>

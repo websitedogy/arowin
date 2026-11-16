@@ -28,6 +28,8 @@ import SupportTicketsPage from '../support/SupportTicketsPage'
 import EmployeeKycPage from '../employees/EmployeeKycPage'
 import EmployeeIncomePage from './EmployeeIncomePage'
 import EmergencySalesPage from '../sales/EmergencySalesPage'
+import TeamLeaderStatesPage from './TeamLeaderStatesPage'
+import TeamLeaderDistrictLeadsPage from './TeamLeaderDistrictLeadsPage'
 import './dashboard-2027.css'
 
 const teamLeaderNavigationGroups = [
@@ -48,7 +50,7 @@ const teamLeaderNavigationGroups = [
   {
     label: 'Team Management',
     items: [
-      { label: 'My team', path: '/team-leader/my-team', icon: 'users', title: 'My Team', description: 'Employees assigned to your team will appear here.', status: 'No team members are assigned yet.' },
+      { label: 'State', path: '/team-leader/state', icon: 'mapPin', title: 'Assigned State', description: 'Browse lead entries from your assigned states.' },
       { label: 'Team sales', path: '/team-leader/team-sales', icon: 'chart', title: 'Team Sales', description: 'Sales recorded for your team will appear here.', status: 'Team sales are not available yet.' },
       { label: 'Team Achievers', path: '/team-leader/team-achievers', icon: 'trophy', title: 'Team Achievers', description: 'Approved sales achievements by your assigned Telecallers.' },
     ],
@@ -69,6 +71,7 @@ const teamLeaderNavigationGroups = [
 
 const teamLeaderPages = [
   ...teamLeaderNavigationGroups.flatMap((group) => group.items),
+  { label: 'State', path: '/team-leader/my-team', icon: 'mapPin', title: 'Assigned State', description: 'Browse lead entries from your assigned states.', hidden: true },
   { label: 'Support', path: '/team-leader/support', icon: 'headset', title: 'Support Helpdesk', description: 'Submit and track support tickets with the management team.' },
   { label: 'Profile', path: '/team-leader/profile', icon: 'user', title: 'My Profile', description: 'View and update your personal details and credentials.' },
   { label: 'Leave', path: '/team-leader/leave', icon: 'calendar', title: 'Leave Management', description: 'Apply for leave and review your leave requests.' },
@@ -229,18 +232,46 @@ const telecallerActivityCards = [
   { label: 'Team Incentives', detail: 'Track team incentive earnings by member', icon: 'gift', path: '/team-leader/team-incentives', tone: 'amber', countLabel: 'member with incentives', countLabelPlural: 'members with incentives' },
   { label: 'Team Rewards', detail: 'Review team monthly reward progress', icon: 'trophy', path: '/team-leader/team-rewards', tone: 'violet', countLabel: 'grant', countLabelPlural: 'grants' },
   { label: 'Team Achievers', detail: 'Celebrate approved team sales achievements', icon: 'medal', path: '/team-leader/team-achievers', tone: 'rose', countLabel: 'achievement', countLabelPlural: 'achievements' },
-  { label: 'My Team Roster', detail: 'View assigned telecallers and active status', icon: 'users', path: '/team-leader/my-team', tone: 'cyan', countLabel: 'member', countLabelPlural: 'members' },
+  { label: 'State', detail: 'View assigned states, districts, and lead entries', icon: 'mapPin', path: '/team-leader/state', tone: 'cyan' },
 ]
 
 function QuickLeadModal({ isOpen, onClose, onLeadCreated }) {
   const [form, setForm] = useState({
     customerName: '',
     mobileNumber: '',
+    stateCode: '',
     district: '',
+    email: '',
+    address: '',
+    dateOfBirth: '',
+    gender: '',
     note: '',
   })
+  const [states, setStates] = useState([])
+  const [territoryError, setTerritoryError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+    let active = true
+    apiRequest('/territories')
+      .then((result) => {
+        if (active) {
+          setStates(result.states)
+          setTerritoryError('')
+        }
+      })
+      .catch((requestError) => {
+        if (active) setTerritoryError(requestError.message)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [isOpen])
+
+  const selectedState = states.find((state) => state.code === form.stateCode)
 
   if (!isOpen) return null
 
@@ -254,7 +285,17 @@ function QuickLeadModal({ isOpen, onClose, onLeadCreated }) {
         body: form,
       })
       onLeadCreated?.(response.lead)
-      setForm({ customerName: '', mobileNumber: '', district: '', note: '' })
+      setForm({
+        customerName: '',
+        mobileNumber: '',
+        stateCode: '',
+        district: '',
+        email: '',
+        address: '',
+        dateOfBirth: '',
+        gender: '',
+        note: '',
+      })
       onClose()
     } catch (err) {
       setError(err.message || 'Could not save lead.')
@@ -307,15 +348,66 @@ function QuickLeadModal({ isOpen, onClose, onLeadCreated }) {
             />
           </label>
           <label>
-            <span>District / Region</span>
-            <input
-              type="text"
-              placeholder="e.g. Hyderabad / Warangal"
+            <span>State / Union Territory</span>
+            <select
+              value={form.stateCode}
+              onChange={(e) => setForm({ ...form, stateCode: e.target.value, district: '' })}
+              required
+            >
+              <option value="">Select a state</option>
+              {states.map((state) => <option key={state.code} value={state.code}>{state.name}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>District</span>
+            <select
               value={form.district}
               onChange={(e) => setForm({ ...form, district: e.target.value })}
-              maxLength={100}
+              disabled={!selectedState}
+              required
+            >
+              <option value="">Select a district</option>
+              {(selectedState?.districts || []).map((district) => <option key={district} value={district}>{district}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Email</span>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              maxLength={180}
+              autoComplete="email"
               required
             />
+          </label>
+          <label>
+            <span>Address</span>
+            <textarea
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              maxLength={500}
+              rows={3}
+              autoComplete="street-address"
+              required
+            />
+          </label>
+          <label>
+            <span>Date of Birth</span>
+            <input
+              type="date"
+              value={form.dateOfBirth}
+              onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })}
+              required
+            />
+          </label>
+          <label>
+            <span>Gender</span>
+            <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })} required>
+              <option value="">Select gender</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
           </label>
           <label>
             <span>Customer Notes <small>(Optional)</small></span>
@@ -327,11 +419,15 @@ function QuickLeadModal({ isOpen, onClose, onLeadCreated }) {
               rows={3}
             />
           </label>
+          <p className="territory-attribution">
+            District data: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
+          </p>
+          {territoryError && <p className="dashboard-data-error" role="alert">{territoryError}</p>}
           <div className="leads-form-actions" style={{ marginTop: '14px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
             <button type="button" className="leads-cancel-button" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="leads-add-button" disabled={isSubmitting} style={{ background: 'linear-gradient(135deg, #0284c7, #2563eb)' }}>
+            <button type="submit" className="leads-add-button" disabled={isSubmitting || !states.length} style={{ background: 'linear-gradient(135deg, #0284c7, #2563eb)' }}>
               {isSubmitting ? 'Saving Lead…' : 'Save Lead Entry'}
             </button>
           </div>
@@ -384,7 +480,7 @@ function WorkspaceBottomNav({ isTeamLeader, currentPath, onNavigate, unlockSales
       { label: 'Home', path: '/team-leader', icon: 'home' },
       { label: 'Today Sales', path: '/team-leader/team-sales', icon: 'chart' },
       { label: 'Team Achievers', path: '/team-leader/team-achievers', icon: 'trophy' },
-      { label: 'My Team', path: '/team-leader/my-team', icon: 'users' },
+      { label: 'State', path: '/team-leader/state', icon: 'mapPin' },
       { label: 'My Income', path: '/team-leader/income', icon: 'wallet' },
     ]
     : [
@@ -398,7 +494,9 @@ function WorkspaceBottomNav({ isTeamLeader, currentPath, onNavigate, unlockSales
   return (
     <nav className="workspace-bottom-nav" aria-label="Quick navigation">
       {items.map((item, index) => {
-        const active = currentPath === item.path || (index === 0 && currentPath === '/')
+        const active = currentPath === item.path
+          || (item.path === '/team-leader/state' && currentPath.startsWith('/team-leader/state/'))
+          || (index === 0 && currentPath === '/')
         return (
           <button
             type="button"
@@ -873,14 +971,24 @@ function TeamPerformancePanel({ members, isLoading, search, compact = false }) {
   )
 }
 
-function TeamActivitiesPanel({ history, selectedMonth }) {
+function TeamActivitiesPanel({ history, selectedMonth, onNavigate }) {
   const activities = history.filter((activity) => String(activity.time).slice(0, 7) === selectedMonth)
 
   return (
     <article className="team-dashboard-panel team-activities-panel">
       <div className="team-panel-heading">
         <div className="team-panel-title"><Icon name="clock" size={23} /><h2>Team Duty & Activity Stream</h2></div>
-        <span className="history-count-badge">{activities.length} recorded</span>
+        <div className="team-activity-panel-actions">
+          <button
+            type="button"
+            className="team-lead-entry-dashboard-button"
+            onClick={() => onNavigate('/team-leader/state')}
+          >
+            <Icon name="mapPin" size={15} />
+            Lead Entry
+          </button>
+          <span className="history-count-badge">{activities.length} recorded</span>
+        </div>
       </div>
       {activities.length ? (
         <div className="team-table-wrap team-activity-table-wrap is-fixed-activity">
@@ -931,6 +1039,7 @@ function TeamLeaderHome({
   incentiveRecords,
   activityCounts,
   onMonthChange,
+  onNavigate,
 }) {
   const members = teamData?.members || []
   const actualSales = (salesData?.dailySales || []).reduce((total, sale) => total + Number(sale.amount), 0)
@@ -956,7 +1065,6 @@ function TeamLeaderHome({
         : incomeParts.reduce((total, count) => total + count, 0),
     'Team Sales Tracker': isLoadingSales ? undefined : salesData?.dailySales?.length ?? 0,
     'Team Target': isLoadingSales ? undefined : monthlyTarget > 0 ? 1 : 0,
-    'My Team Roster': isLoading ? undefined : members.length,
   }
 
   return (
@@ -965,7 +1073,7 @@ function TeamLeaderHome({
 
       <div className="team-dashboard-grid team-dashboard-grid-first">
         <TeamPerformancePanel members={members} isLoading={isLoading} search={search} compact />
-        <TeamActivitiesPanel history={teamData?.history || []} selectedMonth={selectedActivityMonth} />
+        <TeamActivitiesPanel history={teamData?.history || []} selectedMonth={selectedActivityMonth} onNavigate={onNavigate} />
       </div>
 
       <RoleActivitySection
@@ -997,7 +1105,6 @@ function TeamLeaderHome({
           'Team Incentives': 'View report',
           'Team Rewards': isLoadingSales ? 'Loading…' : teamProgress,
           'Team Achievers': 'View all',
-          'My Team Roster': isLoading ? 'Loading…' : `${members.length} members`,
         }}
         counts={counts}
         className="telecaller-activities"
@@ -1056,6 +1163,7 @@ function TeamLeaderContent({
   user,
   onUserUpdate,
   page,
+  currentPath,
   unlockSalesUnlocked,
   emergencyProgress,
   emergencyProgressError,
@@ -1075,6 +1183,18 @@ function TeamLeaderContent({
   onMonthChange,
   onNavigate,
 }) {
+  const districtLeadRoute = currentPath.match(/^\/team-leader\/state\/([A-Z]{2})\/(.+)$/)
+  if (districtLeadRoute) {
+    return (
+      <TeamLeaderDistrictLeadsPage
+        key={`${districtLeadRoute[1]}-${districtLeadRoute[2]}`}
+        stateCode={districtLeadRoute[1]}
+        district={decodeURIComponent(districtLeadRoute[2])}
+        onNavigate={onNavigate}
+      />
+    )
+  }
+
   if (page.path === '/team-leader/attendance') {
     return <AttendancePanel />
   }
@@ -1131,17 +1251,8 @@ function TeamLeaderContent({
     return <TeamAchieversPanel />
   }
 
-  if (page.path === '/team-leader/my-team') {
-    return (
-      <>
-        {teamError && <p className="dashboard-data-error" role="alert">{teamError}</p>}
-        <TeamPerformancePanel
-          members={teamData?.members || []}
-          isLoading={isLoadingTeam}
-          search={teamSearch}
-        />
-      </>
-    )
+  if (page.path === '/team-leader/state' || page.path === '/team-leader/my-team') {
+    return <TeamLeaderStatesPage onNavigate={onNavigate} />
   }
 
   if (page.path === '/team-leader/team-sales') {
@@ -1184,6 +1295,7 @@ function TeamLeaderContent({
         isLoadingIncentives={isLoadingIncentives}
         incentiveError={incentiveError}
         onMonthChange={onMonthChange}
+        onNavigate={onNavigate}
       />
     )
   }
@@ -1691,7 +1803,13 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, currentPat
     setIsLoadingEmergencyProgress(false)
   }, [])
   const unlockSalesUnlocked = emergencyProgress?.unlockSalesUnlocked === true
-  const page = teamLeaderPages.find((item) => item.path === currentPath) || teamLeaderPages[0]
+  const isDistrictLeadRoute = isTeamLeader && /^\/team-leader\/state\/[A-Z]{2}\/.+$/.test(currentPath)
+  const isStateLeadsPage = isTeamLeader
+    && (currentPath === '/team-leader/state' || currentPath === '/team-leader/my-team' || isDistrictLeadRoute)
+  const page = teamLeaderPages.find((item) => item.path === currentPath)
+    || (isDistrictLeadRoute
+      ? teamLeaderPages.find((item) => item.path === '/team-leader/state')
+      : teamLeaderPages[0])
   const currentPageTitle = isTeamLeader
     ? page.title
     : telecallerNavItems.find((item) => item.path === currentPath)?.label || dashboard.title
@@ -1787,7 +1905,7 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, currentPat
   }
 
   useEffect(() => {
-    if (!isTeamLeader || !['/', '/team-leader', '/team-leader/my-team', '/team-leader/team-sales'].includes(currentPath)) return undefined
+    if (!isTeamLeader || !['/', '/team-leader', '/team-leader/team-sales'].includes(currentPath)) return undefined
 
     let active = true
     const loadTeam = () => {
@@ -1938,7 +2056,9 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, currentPat
               <div className="sidebar-nav-section" key={group.label || 'workspace'}>
                 {group.label && <span className="sidebar-nav-heading">{group.label}</span>}
                 {group.items.filter((item) => !item.hidden).map((item) => {
-                  const active = item.path === currentPath || (item.path === '/team-leader' && currentPath === '/')
+                  const active = item.path === currentPath
+                    || (item.path === '/team-leader/state' && currentPath.startsWith('/team-leader/state/'))
+                    || (item.path === '/team-leader' && currentPath === '/')
                   const unlockSalesLocked = item.path === '/team-leader/sales' && !unlockSalesUnlocked
                   return (
                     <button
@@ -2044,7 +2164,7 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, currentPat
               </button>
             </div>
           )}
-          {isTeamLeader && ['/team-leader', '/team-leader/my-team'].includes(currentPath) && (
+          {isTeamLeader && currentPath === '/team-leader' && (
             <div className="team-topbar-search">
               <Icon name="search" size={19} />
               <input
@@ -2065,7 +2185,7 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, currentPat
               <Icon name="headset" size={18} />
               <span>Support</span>
             </button>
-            {isTeamLeader && ['/team-leader', '/team-leader/my-team'].includes(currentPath) && (
+            {isTeamLeader && currentPath === '/team-leader' && (
               <div className="team-notification-wrap" ref={notificationRef}>
                 <button
                   className="team-notification-button"
@@ -2116,7 +2236,7 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, currentPat
         </header>
 
         {isTeamLeader ? (
-          <section className={`role-dashboard-content${page.path === '/team-leader' ? ' team-leader-dashboard-content' : ''}`}>
+          <section className={`role-dashboard-content${page.path === '/team-leader' ? ' team-leader-dashboard-content' : ''}${page.path === '/team-leader/income' ? ' income-dashboard-content' : ''}${page.path === '/team-leader/state' || page.path === '/team-leader/my-team' ? ' team-leader-state-content' : ''}`}>
             {page.path === '/team-leader' ? (
               <div className="team-dashboard-heading">
                 <div className="team-heading-welcome">
@@ -2143,6 +2263,8 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, currentPat
               user={user}
               onUserUpdate={onUserUpdate}
               page={page}
+              currentPath={currentPath}
+              onNavigate={onNavigate}
               unlockSalesUnlocked={unlockSalesUnlocked}
               emergencyProgress={emergencyProgress}
               emergencyProgressError={emergencyProgressError}
@@ -2165,7 +2287,7 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, currentPat
             />
           </section>
         ) : (
-          <section className={`role-dashboard-content${currentPath === '/telecaller/attendance' ? '' : ' telecaller-home-content'}`}>
+          <section className={`role-dashboard-content${currentPath === '/telecaller/attendance' ? '' : ' telecaller-home-content'}${currentPath === '/telecaller/income' ? ' income-dashboard-content' : ''}`}>
           {currentPath === '/telecaller/attendance' ? (
             <>
               <span className="mini-label">Telecaller Workspace</span>
@@ -2193,12 +2315,14 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, currentPat
         </section>
         )}
       </main>
-      <WorkspaceBottomNav
-        isTeamLeader={isTeamLeader}
-        currentPath={currentPath}
-        onNavigate={onNavigate}
-        unlockSalesUnlocked={unlockSalesUnlocked}
-      />
+      {!isStateLeadsPage && (
+        <WorkspaceBottomNav
+          isTeamLeader={isTeamLeader}
+          currentPath={currentPath}
+          onNavigate={onNavigate}
+          unlockSalesUnlocked={unlockSalesUnlocked}
+        />
+      )}
     </div>
   )
 }

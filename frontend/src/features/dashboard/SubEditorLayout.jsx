@@ -13,6 +13,7 @@ const navigationGroups = [
     items: [
       { label: 'Employee KYC', icon: 'file', path: '/employee-kyc' },
       { label: 'All Employees', icon: 'users', path: '/employees/all' },
+      { label: 'States Assign', icon: 'mapPin', path: '/state-assignments' },
     ],
   },
   {

@@ -22,11 +22,17 @@ function displayTime(value) {
     : 'Not checked out'
 }
 
+const attendanceTabs = [
+  { id: 'attendance', label: 'Attendance Tracking' },
+  { id: 'holidays', label: 'Paid Festivals' },
+]
+
 export default function AttendanceTrackingPage() {
   const [month, setMonth] = useState(currentMonth)
   const [report, setReport] = useState(null)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('attendance')
 
   useEffect(() => {
     let active = true
@@ -47,63 +53,79 @@ export default function AttendanceTrackingPage() {
   }, [month])
 
   return (
-    <>
-      <section className="sub-editor-feature-page attendance-report-page">
-        <span className="mini-label">Sub Editor Workspace</span>
-        <h1>Employee Attendance</h1>
-        <p className="sub-editor-feature-description">Review employee check-in, check-out, and attendance adjustments by month.</p>
+    <div className="attendance-management-page">
+      <div className="attendance-management-tabs" role="group" aria-label="Attendance sections">
+        {attendanceTabs.map((tab) => (
+          <button
+            type="button"
+            key={tab.id}
+            className={`attendance-management-tab${activeTab === tab.id ? ' active' : ''}`}
+            aria-pressed={activeTab === tab.id}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-        <label className="sales-month-filter attendance-month-filter">
-          Report month
-          <input
-            type="month"
-            value={month}
-            onChange={(event) => {
-              setIsLoading(true)
-              setError('')
-              setMonth(event.target.value)
-            }}
-          />
-        </label>
+      {activeTab === 'attendance' && (
+        <section className="attendance-report-page">
+          <h1>Employee Attendance</h1>
+          <p className="sub-editor-feature-description">Review employee check-in, check-out, and attendance adjustments by month.</p>
 
-        {error && <p className="dashboard-data-error" role="alert">{error}</p>}
+          <label className="sales-month-filter attendance-month-filter">
+            Report month
+            <input
+              type="month"
+              value={month}
+              onChange={(event) => {
+                setIsLoading(true)
+                setError('')
+                setMonth(event.target.value)
+              }}
+            />
+          </label>
 
-        <article className="dashboard-panel sub-editor-feature-table-panel">
-          <div className="panel-title">
-            <div>
-              <h2>Attendance Records</h2>
-              <small>{isLoading ? 'Loading…' : `${report?.records.length || 0} ${report?.records.length === 1 ? 'record' : 'records'}`}</small>
+          {error && <p className="dashboard-data-error" role="alert">{error}</p>}
+
+          <article className="dashboard-panel sub-editor-feature-table-panel">
+            <div className="panel-title">
+              <div>
+                <h2>Attendance Records</h2>
+                <small>{isLoading ? 'Loading…' : `${report?.records.length || 0} ${report?.records.length === 1 ? 'record' : 'records'}`}</small>
+              </div>
             </div>
-          </div>
-          <div className="employee-table-wrap">
-            <table className="employee-table sales-review-table">
-              <thead>
-                <tr><th>Date</th><th>Employee</th><th>Role</th><th>Check-in</th><th>Check-out</th><th>Late deduction</th><th>On-time bonus</th></tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr><td colSpan="7" className="sub-editor-feature-empty">Loading attendance…</td></tr>
-                ) : error ? (
-                  <tr><td colSpan="7" className="sub-editor-feature-empty">Attendance records could not be loaded.</td></tr>
-                ) : report?.records.length ? report.records.map((record) => (
-                  <tr key={`${record.employeeId}-${record.date}`}>
-                    <td>{record.date}</td>
-                    <td>{record.employeeName}<small className="sales-review-employee-id">{record.employeeId}</small></td>
-                    <td>{record.role === 'team_leader' ? 'Team Leader' : 'Telecaller'}</td>
-                    <td>{displayTime(record.checkedInAt)}</td>
-                    <td>{displayTime(record.checkedOutAt)}</td>
-                    <td>{formatUsdt(record.lateDeduction)}</td>
-                    <td>{formatUsdt(record.onTimeBonus)}</td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan="7" className="sub-editor-feature-empty">No attendance records for this month.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </article>
-      </section>
-      <OfficeLocationSetup />
-    </>
+            <div className="employee-table-wrap">
+              <table className="employee-table sales-review-table">
+                <thead>
+                  <tr><th>Date</th><th>Employee</th><th>Role</th><th>Check-in</th><th>Check-out</th><th>Late deduction</th><th>On-time bonus</th></tr>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    <tr><td colSpan="7" className="sub-editor-feature-empty">Loading attendance…</td></tr>
+                  ) : error ? (
+                    <tr><td colSpan="7" className="sub-editor-feature-empty">Attendance records could not be loaded.</td></tr>
+                  ) : report?.records.length ? report.records.map((record) => (
+                    <tr key={`${record.employeeId}-${record.date}`}>
+                      <td>{record.date}</td>
+                      <td>{record.employeeName}<small className="sales-review-employee-id">{record.employeeId}</small></td>
+                      <td>{record.role === 'team_leader' ? 'Team Leader' : 'Telecaller'}</td>
+                      <td>{displayTime(record.checkedInAt)}</td>
+                      <td>{displayTime(record.checkedOutAt)}</td>
+                      <td>{formatUsdt(record.lateDeduction)}</td>
+                      <td>{formatUsdt(record.onTimeBonus)}</td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="7" className="sub-editor-feature-empty">No attendance records for this month.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+      )}
+
+      {activeTab === 'holidays' && <OfficeLocationSetup section="holidays" />}
+    </div>
   )
 }

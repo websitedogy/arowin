@@ -6867,12 +6867,74 @@ img.employee-profile-avatar {
   padding: 18px 22px 32px;
 }
 
-.office-location-panel {
-  padding: 20px;
+.attendance-management-page {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  padding: 18px 22px 32px;
 }
 
-.office-location-panel .panel-title {
-  margin-bottom: 12px;
+.attendance-management-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 18px;
+  padding: 4px;
+  border: 1px solid #e1e8f2;
+  border-radius: 12px;
+  background: #f5f8fc;
+}
+
+.attendance-management-tab {
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #53647b;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease, box-shadow .16s ease;
+}
+
+.attendance-management-tab:hover {
+  background: #eaf1fa;
+  color: #1c3e68;
+}
+
+.attendance-management-tab.active {
+  background: #176bd1;
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(23, 107, 209, .2);
+}
+
+.attendance-management-tab:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, .3);
+  outline-offset: 2px;
+}
+
+.attendance-report-page > h1 {
+  margin: 0 0 7px;
+  color: #152238;
+  font-size: clamp(1.55rem, 3vw, 2rem);
+  letter-spacing: -.035em;
+}
+
+.attendance-report-page > .attendance-month-filter {
+  margin-top: 18px;
+}
+
+.attendance-management-page .office-location-page {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.attendance-management-page .attendance-holiday-manager {
+  margin-top: 0;
 }
 
 .office-location-instructions {
@@ -6880,77 +6942,6 @@ img.employee-profile-avatar {
   color: #64748b;
   font-size: .83rem;
   line-height: 1.6;
-}
-
-.office-location-form {
-  display: grid;
-  gap: 16px;
-}
-
-.office-location-form label {
-  display: grid;
-  gap: 7px;
-  color: #34445c;
-  font-size: .8rem;
-  font-weight: 700;
-}
-
-.office-location-form input {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
-  border: 1px solid #d5deea;
-  border-radius: 9px;
-  background: #fff;
-  color: #152238;
-  font: inherit;
-}
-
-.office-location-details {
-  display: grid;
-  gap: 14px;
-}
-
-.office-location-details > div {
-  display: grid;
-  gap: 7px;
-  color: #34445c;
-  font-size: .8rem;
-}
-
-.office-location-details strong {
-  color: #152238;
-  font-size: .9rem;
-  font-weight: 650;
-}
-
-.office-location-details a {
-  width: fit-content;
-  color: #0872f5;
-  font-size: .82rem;
-  font-weight: 700;
-}
-
-.office-coordinate-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.office-location-policy {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;
-  padding: 13px;
-  border-radius: 9px;
-  background: #f5f8fc;
-  color: #53647b;
-  font-size: .77rem;
-}
-
-.office-location-policy strong {
-  color: #273951;
 }
 
 .office-location-success {
@@ -7568,6 +7559,23 @@ img.employee-profile-avatar {
 }
 
 @media (max-width: 600px) {
+  .attendance-management-page {
+    padding: 14px 14px 24px;
+  }
+
+  .attendance-management-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 4px;
+  }
+
+  .attendance-management-tab {
+    padding-right: 6px;
+    padding-left: 6px;
+    font-size: .7rem;
+  }
+
   .office-location-page {
     padding: 14px;
   }
@@ -7577,10 +7585,6 @@ img.employee-profile-avatar {
   }
 
   .attendance-holiday-form {
-    grid-template-columns: 1fr;
-  }
-
-  .office-coordinate-grid {
     grid-template-columns: 1fr;
   }
 

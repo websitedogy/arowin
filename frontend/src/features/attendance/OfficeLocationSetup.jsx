@@ -8,9 +8,8 @@ const localToday = () => {
 }
 
 export default function OfficeLocationSetup() {
-  const [officeLocation, setOfficeLocation] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [holidays, setHolidays] = useState([])
   const [holidayDate, setHolidayDate] = useState(localToday)
   const [holidayName, setHolidayName] = useState('')
@@ -20,17 +19,13 @@ export default function OfficeLocationSetup() {
 
   useEffect(() => {
     let active = true
-    Promise.all([
-      apiRequest('/attendance/office-location'),
-      apiRequest('/attendance/holidays'),
-    ])
-      .then(([locationResult, holidayResult]) => {
+    apiRequest('/attendance/holidays')
+      .then((result) => {
         if (!active) return
-        setOfficeLocation(locationResult.officeLocation)
-        setHolidays(holidayResult.holidays)
+        setHolidays(result.holidays)
       })
       .catch((requestError) => {
-        if (active) setError(requestError.message)
+        if (active) setLoadError(requestError.message)
       })
       .finally(() => {
         if (active) setIsLoading(false)
@@ -76,55 +71,6 @@ export default function OfficeLocationSetup() {
 
   return (
     <section className="office-location-page">
-      <header className="page-heading budget-heading">
-        <div className="page-heading-copy">
-          <span className="mini-label">Attendance Tracking</span>
-          <h1>Attendance & Holiday Setup</h1>
-          <p>Manage the fixed office pin and paid holiday calendar.</p>
-        </div>
-      </header>
-
-      <article className="dashboard-panel office-location-panel">
-        <div className="panel-title">
-          <Icon name="home" size={22} />
-          <h2>Attendance geofence</h2>
-        </div>
-        <p className="office-location-instructions">
-          The location is fixed and cannot be changed from this dashboard. Attendance is accepted only within {officeLocation?.radiusMeters ?? 200} meters
-          of this pin.
-        </p>
-        {error && <p className="budget-error" role="alert">{error}</p>}
-        {isLoading ? (
-          <p className="employee-directory-loading" role="status">Loading office location…</p>
-        ) : officeLocation ? (
-          <div className="office-location-form">
-            <div className="office-location-details">
-              <div>
-                <span>Office address</span>
-                <strong>{officeLocation.address}</strong>
-              </div>
-              <div>
-                <span>Fixed coordinates</span>
-                <strong>{officeLocation.latitude}, {officeLocation.longitude}</strong>
-              </div>
-              <a
-                href={`https://www.google.com/maps?q=${officeLocation.latitude},${officeLocation.longitude}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Open fixed pin in Google Maps
-              </a>
-            </div>
-            <div className="office-location-policy">
-              <span><strong>Check-in:</strong> 12:00 AM–10:30 AM (IST)</span>
-              <span><strong>Late:</strong> From 9:46 AM · ₹100 deduction</span>
-              <span><strong>Check-out:</strong> From 5:30 PM (IST)</span>
-              <span><strong>Geofence:</strong> {officeLocation.radiusMeters} meters</span>
-            </div>
-          </div>
-        ) : <p className="budget-error" role="alert">Fixed office location is not configured.</p>}
-      </article>
-
       <article className="dashboard-panel attendance-holiday-manager">
         <div className="panel-title">
           <Icon name="calendar" size={22} />
@@ -133,6 +79,7 @@ export default function OfficeLocationSetup() {
         <p className="office-location-instructions">
           Sundays are automatically paid holidays. Add festival or other paid holidays here; employees do not need to check in or out on these dates.
         </p>
+        {loadError && <p className="budget-error" role="alert">{loadError}</p>}
         {holidayError && <p className="budget-error" role="alert">{holidayError}</p>}
         {holidayNotice && <p className="office-location-success" role="status">{holidayNotice}</p>}
         <form className="attendance-holiday-form" onSubmit={saveHoliday}>
@@ -156,7 +103,9 @@ export default function OfficeLocationSetup() {
           </button>
         </form>
         <div className="attendance-holiday-list">
-          {holidays.length ? holidays.map((holiday) => (
+          {isLoading ? (
+            <p className="attendance-loading" role="status">Loading paid holidays…</p>
+          ) : loadError ? null : holidays.length ? holidays.map((holiday) => (
             <div className="attendance-holiday-row" key={holiday.date}>
               <span><strong>{holiday.name}</strong><small>{holiday.date}</small></span>
               <button type="button" className="secondary-btn" onClick={() => removeHoliday(holiday.date)}>Remove</button>

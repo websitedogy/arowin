@@ -47,6 +47,52 @@ final class AuthController
         ];
     }
 
+    public function changePassword(int $userId, array $payload): void
+    {
+        $currentPassword = $payload['currentPassword'] ?? null;
+        $newPassword = $payload['newPassword'] ?? null;
+        $confirmPassword = $payload['confirmPassword'] ?? null;
+
+        if (
+            !is_string($currentPassword) || $currentPassword === ''
+            || !is_string($newPassword) || $newPassword === ''
+            || !is_string($confirmPassword) || $confirmPassword === ''
+        ) {
+            throw new InvalidArgumentException('Enter your current password and both new password fields.');
+        }
+        if (strlen($newPassword) < 8 || strlen($newPassword) > 72) {
+            throw new InvalidArgumentException('Your new password must be between 8 and 72 characters.');
+        }
+        if ($newPassword !== $confirmPassword) {
+            throw new InvalidArgumentException('The new passwords do not match.');
+        }
+
+        $statement = $this->database->prepare(
+            'SELECT password_hash FROM users WHERE id = :id AND is_active = 1 LIMIT 1'
+        );
+        $statement->execute(['id' => $userId]);
+        $passwordHash = $statement->fetchColumn();
+        if (!is_string($passwordHash) || !password_verify($currentPassword, $passwordHash)) {
+            throw new InvalidArgumentException('Your current password is incorrect.');
+        }
+        if (password_verify($newPassword, $passwordHash)) {
+            throw new InvalidArgumentException('Choose a new password different from your current password.');
+        }
+
+        $newPasswordHash = password_hash($newPassword, PASSWORD_DEFAULT);
+        if (!is_string($newPasswordHash)) {
+            throw new RuntimeException('The new password could not be secured.');
+        }
+
+        $update = $this->database->prepare(
+            'UPDATE users SET password_hash = :password_hash WHERE id = :id AND is_active = 1'
+        );
+        $update->execute(['password_hash' => $newPasswordHash, 'id' => $userId]);
+        if ($update->rowCount() !== 1) {
+            throw new RuntimeException('The password could not be updated. Please try again.');
+        }
+    }
+
     public function updateProfileImage(int $userId, mixed $upload): string
     {
         if (!is_array($upload) || !isset($upload['error'])) {

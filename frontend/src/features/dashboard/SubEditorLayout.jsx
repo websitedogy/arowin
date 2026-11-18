@@ -361,6 +361,18 @@ export default function SubEditorLayout({ user, onLogout, onNavigate, currentPat
           </div>
         </header>
 
+        {currentPath !== '/' && (
+          <button
+            type="button"
+            className="dashboard-corner-back"
+            onClick={() => onNavigate('/')}
+            aria-label="Back to dashboard"
+            title="Back to dashboard"
+          >
+            <Icon name="back" size={17} />
+          </button>
+        )}
+
         {dataLoadError && <p className="dashboard-data-error workspace-data-error" role="alert">{dataLoadError}</p>}
         {pageContent}
       </main>

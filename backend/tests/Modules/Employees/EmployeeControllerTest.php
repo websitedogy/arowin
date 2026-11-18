@@ -29,6 +29,10 @@ final class EmployeeControllerTest extends TestCase
             is_active INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )');
+        $this->database->exec('CREATE TABLE team_leader_leads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employee_id TEXT UNIQUE
+        )');
         $this->database->exec('CREATE TABLE employee_salaries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -111,6 +115,65 @@ final class EmployeeControllerTest extends TestCase
             'dob' => '1988-11-04',
             'address' => 'Kurnool',
             'role' => 'telecaller',
+        ], 1);
+    }
+
+    public function testSubEditorCanResetTeamLeaderPasswordWithoutCurrentPassword(): void
+    {
+        $this->database->exec("INSERT INTO users (id, employee_id, name, email, password_hash, role, mobile, date_of_birth, address, profile_image_path, is_active) VALUES (2, '100002', 'Sub Editor', 'editor@example.com', 'hash', 'sub_editor', '9000000002', '1990-01-01', 'Chennai', NULL, 1)");
+
+        (new EmployeeController($this->database))->resetEmployeePassword(1, [
+            'newPassword' => 'NewLeaderPass123',
+            'confirmPassword' => 'NewLeaderPass123',
+        ], 2);
+
+        $passwordHash = $this->database->query('SELECT password_hash FROM users WHERE id = 1')->fetchColumn();
+        $this->assertIsString($passwordHash);
+        $this->assertTrue(password_verify('NewLeaderPass123', $passwordHash));
+
+        $activity = $this->database->query(
+            "SELECT user_id, action, metadata FROM activity_logs ORDER BY id DESC LIMIT 1"
+        )->fetch(PDO::FETCH_ASSOC);
+        $this->assertSame(2, (int) $activity['user_id']);
+        $this->assertSame('employee.password_reset', $activity['action']);
+        $this->assertStringNotContainsString('NewLeaderPass123', $activity['metadata']);
+    }
+
+    public function testSubEditorCanResetTelecallerPasswordWithoutCurrentPassword(): void
+    {
+        $this->database->exec("INSERT INTO users (id, employee_id, name, email, password_hash, role, mobile, date_of_birth, address, profile_image_path, is_active) VALUES (2, '100002', 'Telecaller', 'caller@example.com', 'hash', 'telecaller', '9000000002', '1990-01-01', 'Chennai', NULL, 1)");
+
+        (new EmployeeController($this->database))->resetEmployeePassword(2, [
+            'newPassword' => 'NewCallerPass123',
+            'confirmPassword' => 'NewCallerPass123',
+        ], 1);
+
+        $passwordHash = $this->database->query('SELECT password_hash FROM users WHERE id = 2')->fetchColumn();
+        $this->assertIsString($passwordHash);
+        $this->assertTrue(password_verify('NewCallerPass123', $passwordHash));
+    }
+
+    public function testEmployeePasswordResetRejectsOtherEmployeeRoles(): void
+    {
+        $this->database->exec("INSERT INTO users (id, employee_id, name, email, password_hash, role, mobile, date_of_birth, address, profile_image_path, is_active) VALUES (2, '100002', 'Sub Editor', 'editor@example.com', 'hash', 'sub_editor', '9000000002', '1990-01-01', 'Chennai', NULL, 1)");
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The selected account is not a Team Leader or Telecaller.');
+
+        (new EmployeeController($this->database))->resetEmployeePassword(2, [
+            'newPassword' => 'NewLeaderPass123',
+            'confirmPassword' => 'NewLeaderPass123',
+        ], 1);
+    }
+
+    public function testTeamLeaderPasswordResetRejectsMismatchedPasswords(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The new passwords do not match.');
+
+        (new EmployeeController($this->database))->resetEmployeePassword(1, [
+            'newPassword' => 'NewLeaderPass123',
+            'confirmPassword' => 'DifferentPass123',
         ], 1);
     }
 }

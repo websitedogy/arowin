@@ -26,6 +26,7 @@ import LeaveManagementPage from '../leave/LeaveManagementPage'
 import DailyActivitiesPage from '../activities/DailyActivitiesPage'
 import SupportTicketsPage from '../support/SupportTicketsPage'
 import EmployeeKycPage from '../employees/EmployeeKycPage'
+import JoiningLetterPage from '../employees/JoiningLetterPage'
 import EmployeeIncomePage from './EmployeeIncomePage'
 import EmergencySalesPage from '../sales/EmergencySalesPage'
 import TeamLeaderStatesPage from './TeamLeaderStatesPage'
@@ -108,6 +109,7 @@ const telecallerNavItems = [
   ...telecallerNavigationGroups.flatMap((group) => group.items),
   { label: 'Support', path: '/telecaller/support', icon: 'headset', available: true },
   { label: 'Profile', path: '/telecaller/profile', icon: 'user', available: true },
+  { label: 'Joining Letter', path: '/telecaller/joining-letter', icon: 'file', available: true },
   { label: 'Leave', path: '/telecaller/leave', icon: 'calendar', available: true },
 ]
 
@@ -783,6 +785,7 @@ function EmployeeProfile({ user, onUserUpdate }) {
 function TeamPerformancePanel({ members, isLoading, search, compact = false }) {
   const [statusFilter, setStatusFilter] = useState('all')
   const [copiedId, setCopiedId] = useState(null)
+  const [showAllMembers, setShowAllMembers] = useState(false)
 
   const handleCopy = (text, id) => {
     navigator.clipboard?.writeText(text)
@@ -800,6 +803,7 @@ function TeamPerformancePanel({ members, isLoading, search, compact = false }) {
     const matchesStatus = statusFilter === 'all' || member.status === statusFilter
     return matchesSearch && matchesStatus
   })
+  const visibleMembers = showAllMembers ? filteredMembers : filteredMembers.slice(0, 5)
 
   return (
     <article className="team-dashboard-panel team-performance-panel">
@@ -862,7 +866,7 @@ function TeamPerformancePanel({ members, isLoading, search, compact = false }) {
           <tbody>
             {isLoading ? (
               <tr className="team-table-message-row"><td colSpan={compact ? 4 : 7}>Loading assigned Telecallers…</td></tr>
-            ) : filteredMembers.length ? filteredMembers.map((member) => (
+            ) : filteredMembers.length ? visibleMembers.map((member) => (
               <tr className="team-member-row" key={member.id}>
                 {compact ? (
                   <>
@@ -967,6 +971,102 @@ function TeamPerformancePanel({ members, isLoading, search, compact = false }) {
           </tbody>
         </table>
       </div>
+      {filteredMembers.length > 5 && (
+        <div className="team-panel-more-wrap">
+          <button
+            type="button"
+            className="team-panel-more-button"
+            aria-expanded={showAllMembers}
+            onClick={() => setShowAllMembers((showing) => !showing)}
+          >
+            {showAllMembers ? 'Show less' : 'More'}
+          </button>
+        </div>
+      )}
+    </article>
+  )
+}
+
+function TeamDistrictsPanel({ onNavigate }) {
+  const [districts, setDistricts] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    const loadDistricts = () => {
+      apiRequest('/team-leader/state-districts')
+        .then((response) => {
+          if (!active) return
+          setDistricts(response.districts)
+          setError('')
+        })
+        .catch((requestError) => {
+          if (active) setError(requestError.message)
+        })
+        .finally(() => {
+          if (active) setIsLoading(false)
+        })
+    }
+
+    loadDistricts()
+    const refreshTimer = window.setInterval(loadDistricts, 30000)
+    return () => {
+      active = false
+      window.clearInterval(refreshTimer)
+    }
+  }, [])
+
+  return (
+    <article className="team-dashboard-panel team-districts-panel">
+      <div className="team-panel-heading">
+        <div className="team-panel-title">
+          <Icon name="mapPin" size={23} />
+          <h2>Assigned Districts ({districts.length})</h2>
+        </div>
+        {districts.length > 5 && (
+          <button
+            type="button"
+            className="team-panel-more-button"
+            onClick={() => onNavigate('/team-leader/state')}
+          >
+            More
+          </button>
+        )}
+      </div>
+      {error && <p className="dashboard-data-error" role="alert">{error}</p>}
+      {isLoading ? (
+        <p className="team-districts-message" role="status">Loading assigned districts…</p>
+      ) : error ? (
+        <p className="team-districts-message">Assigned districts could not be loaded.</p>
+      ) : districts.length ? (
+        <ul className="team-district-list">
+          {districts.slice(0, 5).map((district) => (
+            <li className="team-district-item" key={`${district.stateCode}-${district.district}`}>
+              <div className="team-district-copy">
+                <strong>{district.district}</strong>
+                <span>{district.stateName}</span>
+                {district.latestLead ? (
+                  <small>
+                    Lead: {district.latestLead.employeeName} · #{district.latestLead.employeeId}
+                  </small>
+                ) : (
+                  <small>No lead entry yet</small>
+                )}
+              </div>
+              <button
+                type="button"
+                className="team-district-leads-button"
+                onClick={() => onNavigate(`/team-leader/state/${district.stateCode}/${encodeURIComponent(district.district)}`)}
+              >
+                Lead Entry
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="team-districts-message">No assigned districts yet.</p>
+      )}
     </article>
   )
 }
@@ -1074,6 +1174,7 @@ function TeamLeaderHome({
       <div className="team-dashboard-grid team-dashboard-grid-first">
         <TeamPerformancePanel members={members} isLoading={isLoading} search={search} compact />
         <TeamActivitiesPanel history={teamData?.history || []} selectedMonth={selectedActivityMonth} onNavigate={onNavigate} />
+        <TeamDistrictsPanel onNavigate={onNavigate} />
       </div>
 
       <RoleActivitySection
@@ -1433,6 +1534,10 @@ function TelecallerContent({
 
   if (currentPath === '/telecaller/profile') {
     return <EmployeeProfile user={user} onUserUpdate={onUserUpdate} />
+  }
+
+  if (currentPath === '/telecaller/joining-letter') {
+    return <JoiningLetterPage />
   }
 
   if (currentPath === '/telecaller/income') {
@@ -2226,6 +2331,7 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, currentPat
               actionLabel="My profile"
               actionIcon="user"
               actionPath={isTeamLeader ? '/team-leader/profile' : '/telecaller/profile'}
+              joiningLetterPath={isTeamLeader ? null : '/telecaller/joining-letter'}
               leavePath={isTeamLeader ? '/team-leader/leave' : '/telecaller/leave'}
               isOpen={showProfileMenu}
               onOpenChange={setShowProfileMenu}
@@ -2234,6 +2340,18 @@ export default function RoleDashboard({ user, onUserUpdate, onLogout, currentPat
             />
           </div>
         </header>
+
+        {currentPath !== '/team-leader' && currentPath !== '/telecaller' && (
+          <button
+            type="button"
+            className="dashboard-corner-back"
+            onClick={() => onNavigate(isTeamLeader ? '/team-leader' : '/telecaller')}
+            aria-label="Back to dashboard"
+            title="Back to dashboard"
+          >
+            <Icon name="back" size={17} />
+          </button>
+        )}
 
         {isTeamLeader ? (
           <section className={`role-dashboard-content${page.path === '/team-leader' ? ' team-leader-dashboard-content' : ''}${page.path === '/team-leader/income' ? ' income-dashboard-content' : ''}${page.path === '/team-leader/state' || page.path === '/team-leader/my-team' ? ' team-leader-state-content' : ''}`}>

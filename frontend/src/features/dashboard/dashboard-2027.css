@@ -2427,6 +2427,32 @@ body,
   }
 }
 
+@media (max-width: 700px) {
+  .role-dashboard-leader .team-heading-welcome-row {
+    width: 100%;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .role-dashboard-leader .team-heading-welcome-row h1 {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    font-size: clamp(.95rem, 4vw, 1.25rem) !important;
+    line-height: 1.2 !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .role-dashboard-leader .team-heading-welcome-row .team-emergency-sales-btn {
+    flex: 0 0 auto;
+    padding: 8px 10px;
+    font-size: .75rem;
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 480px) {
   .team-target-six-columns {
     grid-template-columns: 1fr !important;

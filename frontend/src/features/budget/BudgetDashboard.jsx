@@ -4,12 +4,12 @@ import Icon from '../dashboard/components/Icon'
 import { formatCurrency } from '../../utils/formatters'
 
 const budgetCategories = [
-  { key: 'office', label: 'Office Budget', icon: 'home', tone: 'purple' },
+  { key: 'office', label: 'Office Budget', icon: 'home', tone: 'purple', path: '/budget/accounting/office' },
   { key: 'salaries', label: 'Salaries', icon: 'users', tone: 'green', path: '/budget/salaries' },
-  { key: 'assets', label: 'Assets', icon: 'gift', tone: 'orange' },
-  { key: 'expenses', label: 'Expenses', icon: 'file', tone: 'red' },
-  { key: 'advances', label: 'Advances', icon: 'trend', tone: 'teal' },
-  { key: 'ads_promotions', label: 'Ads & Promotions', icon: 'chart', tone: 'indigo' },
+  { key: 'assets', label: 'Assets', icon: 'gift', tone: 'orange', path: '/budget/accounting/assets' },
+  { key: 'expenses', label: 'Expenses', icon: 'file', tone: 'red', path: '/budget/costs/expenses' },
+  { key: 'advances', label: 'Advances', icon: 'trend', tone: 'teal', path: '/budget/advances' },
+  { key: 'ads_promotions', label: 'Ads & Promotions', icon: 'chart', tone: 'indigo', path: '/budget/costs/ads_promotions' },
 ]
 
 const emptyAllocations = () => Object.fromEntries(budgetCategories.map(({ key }) => [key, '0.00']))
@@ -271,7 +271,13 @@ export default function BudgetDashboard({ onNavigate }) {
                       : 'Employee payroll not set'}
                 </span>
               )}
-              {category.path && <span className="budget-card-action">Manage employee salaries <Icon name="arrow" size={16} /></span>}
+              {['office', 'assets'].includes(category.key) && (
+                <span className="budget-card-action">Manage accounting <Icon name="arrow" size={16} /></span>
+              )}
+              {category.key === 'expenses' && <span className="budget-card-action">Manage expenses <Icon name="arrow" size={16} /></span>}
+              {category.key === 'advances' && <span className="budget-card-action">Manage advances <Icon name="arrow" size={16} /></span>}
+              {category.key === 'ads_promotions' && <span className="budget-card-action">Manage promotions <Icon name="arrow" size={16} /></span>}
+              {category.key === 'salaries' && <span className="budget-card-action">Manage employee salaries <Icon name="arrow" size={16} /></span>}
             </>
           )
 

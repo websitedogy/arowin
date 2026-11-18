@@ -103,17 +103,6 @@ export default function AttendanceHistory({ initialMonth, refreshToken }) {
         <p className="attendance-loading" role="status">Loading attendance history…</p>
       ) : history ? (
         <>
-          <div className="attendance-history-summary">
-            <span>Completed work days <strong>{history.attendedDays}</strong></span>
-            <span>Monthly salary <strong>{currency(history.monthlySalary)}</strong></span>
-            <span>Earned <strong>{currency(history.earned)}</strong></span>
-            <span>Daily activity bonus <strong>{currency(history.activityBonus)}</strong></span>
-            <span>On-time bonus <strong>{currency(history.onTimeBonus)}</strong></span>
-            <span>Approved leave cut-off <strong>{currency(history.leaveDeductions)}</strong></span>
-            <span>Late cut-offs <strong>{currency(history.lateDeductions)}</strong></span>
-            <span>Remaining payable <strong>{currency(history.remainingPayable)}</strong></span>
-          </div>
-
           <div className="attendance-calendar" aria-label={`${monthLabel(month)} attendance calendar`}>
             {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
               <span className="attendance-calendar-weekday" key={day}>{day}</span>
@@ -149,18 +138,18 @@ export default function AttendanceHistory({ initialMonth, refreshToken }) {
               <tbody>
                 {history.days.map((day) => (
                   <tr key={day.date}>
-                    <td>{new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short' }).format(new Date(`${day.date}T00:00:00`))}</td>
-                    <td>
+                    <td data-label="Date">{new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short' }).format(new Date(`${day.date}T00:00:00`))}</td>
+                    <td data-label="Status">
                       <span className={`attendance-history-status is-${day.status}`}>
                         {day.status === 'H' ? `H · ${day.holidayName || 'Sunday'}` : statusLabels[day.status]}
                       </span>
                     </td>
-                    <td>{formatTime(day.checkInAt)}</td>
-                    <td>{formatTime(day.checkOutAt)}</td>
-                    <td>{day.lateDeduction ? currency(day.lateDeduction) : '—'}</td>
-                    <td>{day.activityBonus ? currency(day.activityBonus) : '—'}</td>
-                    <td>{day.onTimeBonus ? currency(day.onTimeBonus) : '—'}</td>
-                    <td>{currency(day.earned)}</td>
+                    <td data-label="Check-in">{formatTime(day.checkInAt)}</td>
+                    <td data-label="Check-out">{formatTime(day.checkOutAt)}</td>
+                    <td data-label="Late deduction">{day.lateDeduction ? currency(day.lateDeduction) : '—'}</td>
+                    <td data-label="Activity bonus">{day.activityBonus ? currency(day.activityBonus) : '—'}</td>
+                    <td data-label="On-time bonus">{day.onTimeBonus ? currency(day.onTimeBonus) : '—'}</td>
+                    <td data-label="Earned">{currency(day.earned)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { apiRequest } from '../../api'
 import Icon from '../dashboard/components/Icon'
 import SalarySetupModal from './SalarySetupModal'
-import { formatCurrency } from '../../utils/formatters'
+import { formatCurrency, formatDateTime } from '../../utils/formatters'
 
 export default function SalaryManagementPage({ isLoadingEmployees }) {
   const [employees, setEmployees] = useState([])
@@ -37,7 +37,12 @@ export default function SalaryManagementPage({ isLoadingEmployees }) {
       body: { joiningDate, salaryAmount },
     })
     setEmployees((current) => current.map((item) => item.id === employee.id
-      ? { ...item, joiningDate: result.salary.joiningDate, salaryAmount: result.salary.salaryAmount }
+      ? {
+        ...item,
+        joiningDate: result.salary.joiningDate,
+        salaryAmount: result.salary.salaryAmount,
+        createdAt: result.salary.createdAt,
+      }
       : item))
     setSelectedEmployee(null)
   }
@@ -74,6 +79,7 @@ export default function SalaryManagementPage({ isLoadingEmployees }) {
                   <th>Email</th>
                   <th>Joining Date</th>
                   <th>Salary</th>
+                  <th>Created date &amp; time</th>
                   <th>Salary Setup</th>
                 </tr>
               </thead>
@@ -91,6 +97,7 @@ export default function SalaryManagementPage({ isLoadingEmployees }) {
                     <td>{employee.email}</td>
                     <td>{employee.joiningDate || 'Not set'}</td>
                     <td>{employee.salaryAmount === null ? 'Not set' : formatCurrency(Number(employee.salaryAmount))}</td>
+                    <td>{employee.createdAt ? formatDateTime(employee.createdAt) : '—'}</td>
                     <td>
                       <button
                         type="button"

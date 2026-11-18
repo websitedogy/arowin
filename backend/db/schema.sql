@@ -47,6 +47,121 @@ CREATE TABLE IF NOT EXISTS budget_allocations (
     CONSTRAINT fk_budget_allocation_configurer FOREIGN KEY (configured_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS budget_advances (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    paid_to VARCHAR(160) NOT NULL,
+    reason VARCHAR(500) NOT NULL,
+    amount DECIMAL(14, 2) NOT NULL,
+    payment_mode VARCHAR(32) NOT NULL,
+    is_returnable TINYINT(1) NOT NULL,
+    has_expiry_date TINYINT(1) NOT NULL,
+    expiry_date DATE DEFAULT NULL,
+    created_by BIGINT UNSIGNED,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_budget_advances_created (created_at, id),
+    CONSTRAINT fk_budget_advance_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS office_accounting_entries (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    item_name VARCHAR(160) NOT NULL,
+    quantity DECIMAL(12, 3) NOT NULL,
+    price_per_item DECIMAL(14, 2) NOT NULL,
+    total_price DECIMAL(16, 2) NOT NULL,
+    note VARCHAR(500) NOT NULL DEFAULT '',
+    created_by BIGINT UNSIGNED,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_office_accounting_created (created_at, id),
+    CONSTRAINT fk_office_accounting_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS office_accounting_proofs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    entry_id BIGINT UNSIGNED NOT NULL,
+    file_name VARCHAR(40) NOT NULL,
+    original_name VARCHAR(180) NOT NULL,
+    mime_type VARCHAR(40) NOT NULL,
+    file_size INT UNSIGNED NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_office_accounting_proofs_entry (entry_id, id),
+    CONSTRAINT fk_office_accounting_proof_entry FOREIGN KEY (entry_id)
+        REFERENCES office_accounting_entries(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS assets_accounting_entries (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    item_name VARCHAR(160) NOT NULL,
+    quantity DECIMAL(12, 3) NOT NULL,
+    price_per_item DECIMAL(14, 2) NOT NULL,
+    total_price DECIMAL(16, 2) NOT NULL,
+    note VARCHAR(500) NOT NULL DEFAULT '',
+    created_by BIGINT UNSIGNED,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_assets_accounting_created (created_at, id),
+    CONSTRAINT fk_assets_accounting_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS assets_accounting_proofs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    entry_id BIGINT UNSIGNED NOT NULL,
+    file_name VARCHAR(40) NOT NULL,
+    original_name VARCHAR(180) NOT NULL,
+    mime_type VARCHAR(40) NOT NULL,
+    file_size INT UNSIGNED NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_assets_accounting_proofs_entry (entry_id, id),
+    CONSTRAINT fk_assets_accounting_proof_entry FOREIGN KEY (entry_id)
+        REFERENCES assets_accounting_entries(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS expenses_entries (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    entry_name VARCHAR(160) NOT NULL,
+    amount DECIMAL(14, 2) NOT NULL,
+    note VARCHAR(500) NOT NULL DEFAULT '',
+    created_by BIGINT UNSIGNED,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_expenses_entries_created (created_at, id),
+    CONSTRAINT fk_expenses_entry_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS expenses_proofs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    entry_id BIGINT UNSIGNED NOT NULL,
+    file_name VARCHAR(40) NOT NULL,
+    original_name VARCHAR(180) NOT NULL,
+    mime_type VARCHAR(40) NOT NULL,
+    file_size INT UNSIGNED NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_expenses_proofs_entry (entry_id, id),
+    CONSTRAINT fk_expenses_proof_entry FOREIGN KEY (entry_id)
+        REFERENCES expenses_entries(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ads_promotions_entries (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    entry_name VARCHAR(160) NOT NULL,
+    amount DECIMAL(14, 2) NOT NULL,
+    note VARCHAR(500) NOT NULL DEFAULT '',
+    created_by BIGINT UNSIGNED,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_ads_promotions_entries_created (created_at, id),
+    CONSTRAINT fk_ads_promotions_entry_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS ads_promotions_proofs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    entry_id BIGINT UNSIGNED NOT NULL,
+    file_name VARCHAR(40) NOT NULL,
+    original_name VARCHAR(180) NOT NULL,
+    mime_type VARCHAR(40) NOT NULL,
+    file_size INT UNSIGNED NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_ads_promotions_proofs_entry (entry_id, id),
+    CONSTRAINT fk_ads_promotions_proof_entry FOREIGN KEY (entry_id)
+        REFERENCES ads_promotions_entries(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS office_locations (
     id TINYINT UNSIGNED PRIMARY KEY,
     address VARCHAR(255) NOT NULL,
@@ -79,6 +194,16 @@ CREATE TABLE IF NOT EXISTS employee_kyc (
     submitted_at DATETIME NOT NULL,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_employee_kyc_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS employee_joining_letters (
+    user_id BIGINT UNSIGNED PRIMARY KEY,
+    file_path VARCHAR(80) NOT NULL,
+    original_name VARCHAR(180) NOT NULL,
+    mime_type VARCHAR(40) NOT NULL,
+    file_size BIGINT UNSIGNED NOT NULL,
+    uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_employee_joining_letter_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 INSERT INTO office_locations (id, address, latitude, longitude)

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { apiRequest } from '../../api'
-import Icon from '../dashboard/components/Icon'
 import AttendanceSelfieModal from './AttendanceSelfieModal'
 import AttendanceHistory from './AttendanceHistory'
 import formatDateTime from '../../utils/formatDateTime'
@@ -151,7 +150,6 @@ export default function AttendancePanel({ compact = false, heading = 'Attendance
     <article className={`attendance-panel${compact ? ' is-compact' : ''}`}>
       <div className="attendance-panel-heading">
         <div className="attendance-panel-title">
-          <span className="attendance-panel-icon"><Icon name="calendar" size={21} /></span>
           <div><h2>{heading}</h2><p>{subtitle}</p></div>
         </div>
         {attendance?.today?.checkedInAt && (
@@ -212,11 +210,6 @@ export default function AttendancePanel({ compact = false, heading = 'Attendance
                 ? 'Daily salary not available'
                 : `${currency(attendance.dailySalary)} earned after a completed check-in and check-out; approved leave is unpaid, while Sundays and configured holidays are paid.`}
             </small>
-          </div>
-
-          <div className="attendance-policy-note">
-            <Icon name="clock" size={17} />
-            <span>Check in by 9:30 AM to earn the configured on-time bonus. Check in by 9:45 AM to avoid a deduction. Check-ins from 9:46 AM to 10:29 AM are marked late; the ₹100 deduction is included in the cut-off. Approved leave and unattended workdays are unpaid. Sundays and Sub Editor holidays are paid and need no attendance. Attendance requires live location within {attendance.officeRadiusMeters} meters and a selfie.</span>
           </div>
 
           {isPaidHolidayToday ? (

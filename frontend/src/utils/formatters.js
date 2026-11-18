@@ -18,3 +18,17 @@ export function formatMonth(value, month = 'long') {
     ? value
     : new Intl.DateTimeFormat(undefined, { month, year: 'numeric' }).format(date)
 }
+
+export function formatDateTime(value) {
+  if (!value) return '—'
+  const date = new Date(value.replace(' ', 'T'))
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(date)
+}

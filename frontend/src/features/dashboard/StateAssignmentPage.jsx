@@ -137,7 +137,6 @@ export default function StateAssignmentPage() {
           </table>
         </div>
       </article>
-
       {selectedLeader && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget && !isSaving) setSelectedLeader(null)

@@ -1,6 +1,11 @@
 import Icon from '../dashboard/components/Icon'
 
-export default function EmployeeList({ employees, onAddEmployee, emptyMessage = 'Create an employee ID to see it in this list.' }) {
+export default function EmployeeList({
+  employees,
+  onAddEmployee,
+  onResetPassword,
+  emptyMessage = 'Create an employee ID to see it in this list.',
+}) {
   return (
     <article className="dashboard-panel employee-list-panel">
       <div className="panel-title employee-list-title">
@@ -15,7 +20,10 @@ export default function EmployeeList({ employees, onAddEmployee, emptyMessage = 
         <div className="employee-table-wrap">
           <table className="employee-table">
             <thead>
-              <tr><th>Employee ID</th><th>Employee</th><th>Role</th><th>Email</th><th>Status</th></tr>
+              <tr>
+                <th>Employee ID</th><th>Employee</th><th>Role</th><th>Email</th><th>Status</th>
+                {onResetPassword && <th>Actions</th>}
+              </tr>
             </thead>
             <tbody>
               {employees.map((employee) => (
@@ -30,6 +38,20 @@ export default function EmployeeList({ employees, onAddEmployee, emptyMessage = 
                   <td>{employee.role}</td>
                   <td>{employee.email}</td>
                   <td><span className={`employee-status${employee.status === 'Active' ? ' is-active' : ''}`}>{employee.status}</span></td>
+                  {onResetPassword && (
+                    <td>
+                      {['team_leader', 'telecaller'].includes(employee.roleKey) && (
+                        <button
+                          type="button"
+                          className="employee-password-reset-button"
+                          onClick={() => onResetPassword(employee)}
+                        >
+                          <Icon name="lock" size={14} />
+                          Reset Password
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

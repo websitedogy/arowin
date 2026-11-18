@@ -76,4 +76,57 @@ final class AuthControllerTest extends TestCase
         $this->assertSame('123456', $user['employeeId']);
         $this->assertSame('2024-01-15', $user['joiningDate']);
     }
+
+    public function testChangePasswordVerifiesCurrentPasswordAndStoresNewHash(): void
+    {
+        $controller = new AuthController($this->database);
+
+        $controller->changePassword(1, [
+            'currentPassword' => 'Pass1234',
+            'newPassword' => 'UpdatedPass123',
+            'confirmPassword' => 'UpdatedPass123',
+        ]);
+
+        $passwordHash = $this->database->query('SELECT password_hash FROM users WHERE id = 1')->fetchColumn();
+        $this->assertIsString($passwordHash);
+        $this->assertTrue(password_verify('UpdatedPass123', $passwordHash));
+        $this->assertFalse(password_verify('Pass1234', $passwordHash));
+        $this->assertTrue($controller->login(['username' => '123456', 'password' => 'UpdatedPass123'])['success']);
+    }
+
+    public function testChangePasswordRejectsAnIncorrectCurrentPassword(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Your current password is incorrect.');
+
+        (new AuthController($this->database))->changePassword(1, [
+            'currentPassword' => 'WrongPass',
+            'newPassword' => 'UpdatedPass123',
+            'confirmPassword' => 'UpdatedPass123',
+        ]);
+    }
+
+    public function testChangePasswordRejectsMismatchedNewPasswords(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The new passwords do not match.');
+
+        (new AuthController($this->database))->changePassword(1, [
+            'currentPassword' => 'Pass1234',
+            'newPassword' => 'UpdatedPass123',
+            'confirmPassword' => 'DifferentPass123',
+        ]);
+    }
+
+    public function testChangePasswordRequiresAtLeastEightCharacters(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Your new password must be between 8 and 72 characters.');
+
+        (new AuthController($this->database))->changePassword(1, [
+            'currentPassword' => 'Pass1234',
+            'newPassword' => 'short',
+            'confirmPassword' => 'short',
+        ]);
+    }
 }

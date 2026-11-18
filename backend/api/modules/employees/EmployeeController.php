@@ -181,6 +181,74 @@ final class EmployeeController
         ];
     }
 
+    public function resetEmployeePassword(int $employeeId, array $payload, int $resetBy): void
+    {
+        $newPassword = $payload['newPassword'] ?? null;
+        $confirmPassword = $payload['confirmPassword'] ?? null;
+        if (!is_string($newPassword) || !is_string($confirmPassword) || $newPassword === '' || $confirmPassword === '') {
+            throw new \InvalidArgumentException('Enter and confirm the new password.');
+        }
+        if (strlen($newPassword) < 8 || strlen($newPassword) > 72) {
+            throw new \InvalidArgumentException('The new password must be between 8 and 72 characters.');
+        }
+        if ($newPassword !== $confirmPassword) {
+            throw new \InvalidArgumentException('The new passwords do not match.');
+        }
+        if ($employeeId < 1 || $resetBy < 1) {
+            throw new \InvalidArgumentException('Choose a valid employee account.');
+        }
+
+        $passwordHash = password_hash($newPassword, PASSWORD_DEFAULT);
+        if (!is_string($passwordHash)) {
+            throw new \RuntimeException('The new password could not be secured.');
+        }
+
+        $this->database->beginTransaction();
+        try {
+            $target = $this->database->prepare(
+                "SELECT employee_id, name, role FROM users
+                 WHERE id = :id AND role IN ('team_leader', 'telecaller')
+                 LIMIT 1"
+            );
+            $target->execute(['id' => $employeeId]);
+            $employee = $target->fetch(PDO::FETCH_ASSOC);
+            if (!is_array($employee)) {
+                throw new \InvalidArgumentException('The selected account is not a Team Leader or Telecaller.');
+            }
+
+            $update = $this->database->prepare(
+                "UPDATE users SET password_hash = :password_hash
+                 WHERE id = :id AND role IN ('team_leader', 'telecaller')"
+            );
+            $update->execute(['password_hash' => $passwordHash, 'id' => $employeeId]);
+            if ($update->rowCount() !== 1) {
+                throw new \RuntimeException('The password could not be reset. Please try again.');
+            }
+
+            $activity = $this->database->prepare(
+                "INSERT INTO activity_logs (user_id, action, metadata)
+                 VALUES (:user_id, 'employee.password_reset', :metadata)"
+            );
+            $activity->execute([
+                'user_id' => $resetBy,
+                'metadata' => json_encode([
+                    'employee_user_id' => $employeeId,
+                    'employee_code' => (string) $employee['employee_id'],
+                    'employee_name' => (string) $employee['name'],
+                    'employee_role' => (string) $employee['role'],
+                ], JSON_THROW_ON_ERROR),
+            ]);
+
+            $this->database->commit();
+        } catch (\Throwable $error) {
+            if ($this->database->inTransaction()) {
+                $this->database->rollBack();
+            }
+
+            throw $error;
+        }
+    }
+
     private function sendCredentials(
         CredentialDeliveryService $delivery,
         string $email,

@@ -86,7 +86,7 @@ The customer ID is matched against `username`. Active records with a `purchased_
 
 To apply additive schema updates to an already initialized database without reseeding or changing accounts, run `C:\xampp\php\php.exe backend\api\setup.php --schema-only` from the repository root. This mode requires an existing active Sub Editor account.
 
-Run this migration before using Emergency Sales progress or submissions; it adds the employee-credit and emergency-assignment linkage columns used to calculate completion and unlock My Unlock Sales.
+Run this migration before using Emergency Sales progress or submissions; it adds the employee-credit and emergency-assignment linkage columns used to calculate completion and unlock My Unlock Sales. It also creates the Telecaller joining-letter table, budget advances table, Office and Assets accounting tables, Expenses and Ads & Promotions entry tables, and their private proof-image tables.
 
 Do not copy the placeholder above literally or generate a replacement on each run. After setup, start the API from that same PowerShell window so its environment settings are available:
 
@@ -133,15 +133,21 @@ The frontend defaults to port `8000` on the same host. Override it with `VITE_AP
 - Team Leaders can add and manage lead entries for every district in their assigned states. The district table shows the latest entry per district; opening **Lead Entry** shows all entries and the **All Leads**, **Taken Employees**, **Direct Sellers**, and **Not Interested** filters. New entries receive a generated six-digit Employee ID and begin with `new` status; their status can be changed from the district lead page.
 - Team member joining dates use the configured salary record, falling back to a legacy `users.joining_date` column when present.
 - Employee profiles contain a name, unique email, role, mobile number, date of birth, address, active status, and a password hash. Joining date is configured alongside salary in Salary Setup; employees without one display **Not recorded**.
+- Sub Editors can reset a Team Leader's or Telecaller's password from the corresponding employee list without knowing the old password. The new password is entered and confirmed by the Sub Editor; the reset is recorded in the activity log without storing the password there.
 - Every account has a unique six-digit `employee_id`. The setup script assigns IDs to existing users once and enforces a unique database index; IDs are returned in employee, login, and credential-download responses.
 
 API routes:
 
 - `POST /api/auth/login`
+- `POST /api/auth/change-password` (signed-in Sub Editor, Team Leader, or Telecaller; requires current password)
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
+- `GET /api/telecaller/joining-letter` (Telecaller session; checks joining-letter upload status)
+- `POST /api/telecaller/joining-letter` (Telecaller session; uploads or replaces a private PDF, JPEG, or PNG joining letter)
+- `GET /api/telecaller/joining-letter/file` (Telecaller session; downloads the signed-in Telecaller's private joining letter)
 - `GET /api/employees` (Sub Editor session)
 - `POST /api/employees` (Sub Editor session)
+- `POST /api/employees/{id}/password/reset` (Sub Editor session; Team Leader or Telecaller target only; JSON body includes `newPassword` and `confirmPassword`)
 - `GET /api/activity/recent` (Sub Editor session)
 - `GET /api/credentials/download/{token}` (one-time link check)
 - `POST /api/credentials/download/{token}` (consume link and retrieve credentials)
@@ -151,6 +157,20 @@ API routes:
 - `GET /api/budget` (Sub Editor session; company budget, bank name, account holder, masked account number, IFSC code, and category allocations)
 - `POST /api/budget/company` (Sub Editor session; JSON body includes positive `totalBudget`, `bankName`, `accountHolderName`, `accountNumber` on initial setup, and `ifscCode`; when editing, an empty account number retains the saved number)
 - `POST /api/budget/allocations` (Sub Editor session; JSON body assigns or updates one category at a time, for example `{"allocations":{"office":"25000"}}`; total assigned category budgets cannot exceed the Company Budget, and setting an amount to `0` removes that category assignment)
+- `GET /api/budget/advances` (Sub Editor session; lists advance payment records)
+- `POST /api/budget/advances` (Sub Editor session; creates an advance with payee, reason, amount, payment method, returnability, and optional expiry date)
+- `POST /api/budget/advances/{advanceId}` (Sub Editor session; updates an advance)
+- `DELETE /api/budget/advances/{advanceId}` (Sub Editor session; deletes an advance)
+- `GET /api/budget/accounting?category=office` or `?category=assets` (Sub Editor session; lists entries from the category's dedicated tables)
+- `POST /api/budget/accounting` (Sub Editor session; multipart item name, quantity, unit price, optional note, and multiple JPEG/PNG/WebP proofs; total price is calculated by the API)
+- `POST /api/budget/accounting/{office|assets}/{entryId}` (Sub Editor session; edits entry details, can add proofs, and removes selected proofs)
+- `DELETE /api/budget/accounting/{office|assets}/{entryId}` (Sub Editor session; deletes the entry and its proofs)
+- `GET /api/budget/accounting/proofs/{proofId}?category=office` or `?category=assets` (Sub Editor session; streams a private proof image from the category's dedicated proof table)
+- `GET /api/budget/costs?category=expenses` or `?category=ads_promotions` (Sub Editor session; lists entries from the category's dedicated tables)
+- `POST /api/budget/costs` (Sub Editor session; multipart name, amount, optional note, and multiple JPEG/PNG/WebP proofs)
+- `POST /api/budget/costs/{expenses|ads_promotions}/{entryId}` (Sub Editor session; edits entry details, can add proofs, and removes selected proofs)
+- `DELETE /api/budget/costs/{expenses|ads_promotions}/{entryId}` (Sub Editor session; deletes the entry and its proofs)
+- `GET /api/budget/costs/proofs/{proofId}?category=expenses` or `?category=ads_promotions` (Sub Editor session; streams a private proof image from the category's dedicated proof table)
 - `GET /api/attendance/office-location` (Sub Editor session)
 - `GET /api/attendance/holidays` (Sub Editor session)
 - `POST /api/attendance/holidays` (Sub Editor session)

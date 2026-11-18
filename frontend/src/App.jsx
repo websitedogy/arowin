@@ -14,6 +14,9 @@ import EmployeeDirectoryPage from './features/employees/EmployeeDirectoryPage'
 import EmployeeKycPage from './features/employees/EmployeeKycPage'
 import BudgetDashboard from './features/budget/BudgetDashboard'
 import SalaryManagementPage from './features/budget/SalaryManagementPage'
+import AccountingLedgerPage from './features/budget/AccountingLedgerPage'
+import BudgetCostLedgerPage from './features/budget/BudgetCostLedgerPage'
+import AdvancesPage from './features/budget/AdvancesPage'
 import AttendanceTrackingPage from './features/attendance/AttendanceTrackingPage'
 import AllLeadsPage from './features/sales/AllLeadsPage'
 import LeaveManagementPage from './features/leave/LeaveManagementPage'
@@ -149,6 +152,18 @@ function App() {
 
           if (currentPath === '/budget/salaries') {
             return <SalaryManagementPage isLoadingEmployees={workspace.isLoading} />
+          }
+
+          if (currentPath === '/budget/advances') {
+            return <AdvancesPage />
+          }
+
+          if (currentPath === '/budget/accounting/office' || currentPath === '/budget/accounting/assets') {
+            return <AccountingLedgerPage categoryKey={currentPath.endsWith('/office') ? 'office' : 'assets'} />
+          }
+
+          if (currentPath === '/budget/costs/expenses' || currentPath === '/budget/costs/ads_promotions') {
+            return <BudgetCostLedgerPage categoryKey={currentPath.endsWith('/expenses') ? 'expenses' : 'ads_promotions'} />
           }
 
           if (currentPath === '/attendance') {

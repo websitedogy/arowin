@@ -13,6 +13,7 @@ use Arowin\Modules\Credentials\CredentialDeliveryService;
 use Arowin\Modules\DailyActivities\DailyActivityController;
 use Arowin\Modules\Dashboard\DashboardController;
 use Arowin\Modules\Employees\EmployeeController;
+use Arowin\Modules\Employees\EmployeeJoiningLetterController;
 use Arowin\Modules\Employees\EmployeeKycController;
 use Arowin\Modules\Leave\LeaveController;
 use Arowin\Modules\Leads\LeadController;
@@ -101,6 +102,20 @@ try {
         jsonResponse($result, ($result['success'] ?? false) ? 200 : 401);
     }
 
+    if ($path === '/api/auth/change-password' && $method === 'POST') {
+        requireAuthenticated();
+        if (!in_array($_SESSION['user']['role'] ?? '', ['sub_editor', 'team_leader', 'telecaller'], true)) {
+            jsonResponse(['success' => false, 'message' => 'This account cannot change its password here.'], 403);
+        }
+
+        (new AuthController(Database::connect()))->changePassword(
+            (int) $_SESSION['user']['id'],
+            parseJsonBody()
+        );
+        session_regenerate_id(true);
+        jsonResponse(['success' => true, 'message' => 'Your password has been updated.']);
+    }
+
     if ($path === '/api/auth/logout' && $method === 'POST') {
         AuthController::logout();
         jsonResponse(['success' => true]);
@@ -143,6 +158,35 @@ try {
             ),
             'message' => 'Your KYC details have been submitted securely.',
         ]);
+    }
+
+    if ($path === '/api/telecaller/joining-letter' && in_array($method, ['GET', 'POST'], true)) {
+        $userId = requireTelecaller();
+        header('Cache-Control: private, no-store');
+        $joiningLetter = new EmployeeJoiningLetterController(Database::connect());
+        if ($method === 'GET') {
+            jsonResponse(['success' => true, 'joiningLetter' => $joiningLetter->get($userId)]);
+        }
+        jsonResponse([
+            'success' => true,
+            'joiningLetter' => $joiningLetter->upload($userId, $_FILES['joining_letter'] ?? null),
+            'message' => 'Your joining letter has been uploaded.',
+        ]);
+    }
+
+    if ($path === '/api/telecaller/joining-letter/file' && $method === 'GET') {
+        $userId = requireTelecaller();
+        header('Cache-Control: private, no-store');
+        $document = (new EmployeeJoiningLetterController(Database::connect()))->document($userId);
+        if ($document === null) {
+            jsonResponse(['success' => false, 'message' => 'No joining letter has been uploaded yet.'], 404);
+        }
+        header('Content-Type: ' . $document['mimeType']);
+        header('Content-Length: ' . (string) filesize($document['path']));
+        header('Content-Disposition: attachment; filename*=UTF-8\'\'' . rawurlencode($document['name']));
+        header('X-Content-Type-Options: nosniff');
+        readfile($document['path']);
+        exit;
     }
 
     if ($path === '/api/auth/profile-image' && in_array($method, ['GET', 'POST'], true)) {
@@ -196,6 +240,20 @@ try {
         ], 201);
     }
 
+    if (
+        is_string($path)
+        && preg_match('#^/api/employees/([1-9][0-9]*)/password/reset$#', $path, $matches)
+        && $method === 'POST'
+    ) {
+        requireSubEditor();
+        (new EmployeeController(Database::connect()))->resetEmployeePassword(
+            (int) $matches[1],
+            parseJsonBody(),
+            (int) $_SESSION['user']['id']
+        );
+        jsonResponse(['success' => true, 'message' => 'The employee password has been reset.']);
+    }
+
     if ($path === '/api/budget' && $method === 'GET') {
         requireSubEditor();
         jsonResponse(['success' => true, 'budget' => (new BudgetController(Database::connect()))->summary()]);
@@ -233,6 +291,166 @@ try {
             (int) $_SESSION['user']['id']
         );
         jsonResponse(['success' => true, 'salary' => $salary]);
+    }
+
+    if ($path === '/api/budget/advances' && $method === 'GET') {
+        requireSubEditor();
+        $entries = (new BudgetController(Database::connect()))->listAdvances();
+        jsonResponse(['success' => true, 'entries' => $entries]);
+    }
+
+    if ($path === '/api/budget/advances' && $method === 'POST') {
+        requireSubEditor();
+        $entry = (new BudgetController(Database::connect()))->saveAdvance(
+            parseJsonBody(),
+            (int) $_SESSION['user']['id']
+        );
+        jsonResponse(['success' => true, 'entry' => $entry], 201);
+    }
+
+    if (is_string($path) && preg_match('#^/api/budget/advances/([1-9][0-9]*)$#', $path, $matches) && $method === 'POST') {
+        requireSubEditor();
+        $entry = (new BudgetController(Database::connect()))->updateAdvance(
+            (int) $matches[1],
+            parseJsonBody()
+        );
+        jsonResponse(['success' => true, 'entry' => $entry]);
+    }
+
+    if (is_string($path) && preg_match('#^/api/budget/advances/([1-9][0-9]*)$#', $path, $matches) && $method === 'DELETE') {
+        requireSubEditor();
+        (new BudgetController(Database::connect()))->deleteAdvance((int) $matches[1]);
+        jsonResponse(['success' => true]);
+    }
+
+    if ($path === '/api/budget/costs' && $method === 'GET') {
+        requireSubEditor();
+        $category = $_GET['category'] ?? '';
+        if (!is_string($category)) {
+            jsonResponse(['success' => false, 'message' => 'Choose Expenses or Ads & Promotions.'], 400);
+        }
+        $entries = (new BudgetController(Database::connect()))->listCostEntries($category);
+        jsonResponse(['success' => true, 'entries' => $entries]);
+    }
+
+    if ($path === '/api/budget/costs' && $method === 'POST') {
+        requireSubEditor();
+        $entry = (new BudgetController(Database::connect()))->saveCostEntry(
+            (string) ($_POST['category'] ?? ''),
+            $_POST,
+            $_FILES['proofs'] ?? null,
+            (int) $_SESSION['user']['id']
+        );
+        jsonResponse(['success' => true, 'entry' => $entry], 201);
+    }
+
+    if (
+        is_string($path)
+        && preg_match('#^/api/budget/costs/(expenses|ads_promotions)/([1-9][0-9]*)$#', $path, $matches)
+        && $method === 'POST'
+    ) {
+        requireSubEditor();
+        $entry = (new BudgetController(Database::connect()))->updateCostEntry(
+            $matches[1],
+            (int) $matches[2],
+            $_POST,
+            $_FILES['proofs'] ?? null
+        );
+        jsonResponse(['success' => true, 'entry' => $entry]);
+    }
+
+    if (
+        is_string($path)
+        && preg_match('#^/api/budget/costs/(expenses|ads_promotions)/([1-9][0-9]*)$#', $path, $matches)
+        && $method === 'DELETE'
+    ) {
+        requireSubEditor();
+        (new BudgetController(Database::connect()))->deleteCostEntry($matches[1], (int) $matches[2]);
+        jsonResponse(['success' => true]);
+    }
+
+    if (
+        is_string($path)
+        && preg_match('#^/api/budget/costs/proofs/([1-9][0-9]*)$#', $path, $matches)
+        && $method === 'GET'
+    ) {
+        requireSubEditor();
+        $category = $_GET['category'] ?? '';
+        if (!is_string($category)) {
+            jsonResponse(['success' => false, 'message' => 'Choose Expenses or Ads & Promotions.'], 400);
+        }
+        $proof = (new BudgetController(Database::connect()))->costProof($category, (int) $matches[1]);
+        header('Content-Type: ' . $proof['mimeType']);
+        header('Content-Length: ' . (string) filesize($proof['path']));
+        header('Cache-Control: private, no-store');
+        header('X-Content-Type-Options: nosniff');
+        readfile($proof['path']);
+        exit;
+    }
+
+    if ($path === '/api/budget/accounting' && $method === 'GET') {
+        requireSubEditor();
+        $category = $_GET['category'] ?? '';
+        if (!is_string($category)) {
+            jsonResponse(['success' => false, 'message' => 'Choose Office or Assets accounting.'], 400);
+        }
+        $entries = (new BudgetController(Database::connect()))->listAccountingEntries($category);
+        jsonResponse(['success' => true, 'entries' => $entries]);
+    }
+
+    if ($path === '/api/budget/accounting' && $method === 'POST') {
+        requireSubEditor();
+        $entry = (new BudgetController(Database::connect()))->saveAccountingEntry(
+            (string) ($_POST['category'] ?? ''),
+            $_POST,
+            $_FILES['proofs'] ?? null,
+            (int) $_SESSION['user']['id']
+        );
+        jsonResponse(['success' => true, 'entry' => $entry], 201);
+    }
+
+    if (
+        is_string($path)
+        && preg_match('#^/api/budget/accounting/(office|assets)/([1-9][0-9]*)$#', $path, $matches)
+        && $method === 'POST'
+    ) {
+        requireSubEditor();
+        $entry = (new BudgetController(Database::connect()))->updateAccountingEntry(
+            $matches[1],
+            (int) $matches[2],
+            $_POST,
+            $_FILES['proofs'] ?? null
+        );
+        jsonResponse(['success' => true, 'entry' => $entry]);
+    }
+
+    if (
+        is_string($path)
+        && preg_match('#^/api/budget/accounting/(office|assets)/([1-9][0-9]*)$#', $path, $matches)
+        && $method === 'DELETE'
+    ) {
+        requireSubEditor();
+        (new BudgetController(Database::connect()))->deleteAccountingEntry($matches[1], (int) $matches[2]);
+        jsonResponse(['success' => true]);
+    }
+
+    if (
+        is_string($path)
+        && preg_match('#^/api/budget/accounting/proofs/([1-9][0-9]*)$#', $path, $matches)
+        && $method === 'GET'
+    ) {
+        requireSubEditor();
+        $category = $_GET['category'] ?? '';
+        if (!is_string($category)) {
+            jsonResponse(['success' => false, 'message' => 'Choose Office or Assets accounting.'], 400);
+        }
+        $proof = (new BudgetController(Database::connect()))->accountingProof($category, (int) $matches[1]);
+        header('Content-Type: ' . $proof['mimeType']);
+        header('Content-Length: ' . (string) filesize($proof['path']));
+        header('Cache-Control: private, no-store');
+        header('X-Content-Type-Options: nosniff');
+        readfile($proof['path']);
+        exit;
     }
 
     if ($path === '/api/attendance/settings' && $method === 'GET') {
@@ -1211,6 +1429,16 @@ function requireKycEmployee(): int
     }
 
     return (int) ($_SESSION['user']['id'] ?? 0);
+}
+
+function requireTelecaller(): int
+{
+    requireAuthenticated();
+    if (($_SESSION['user']['role'] ?? null) !== 'telecaller') {
+        jsonResponse(['success' => false, 'message' => 'Only Telecallers can manage their joining letter.'], 403);
+    }
+
+    return (int) $_SESSION['user']['id'];
 }
 
 function requireDailyActivityEmployee(): int

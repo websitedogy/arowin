@@ -73,6 +73,51 @@ try {
         }
     }
 
+    $accountingTables = [
+        'office' => [
+            'entries' => 'office_accounting_entries',
+            'proofs' => 'office_accounting_proofs',
+        ],
+        'assets' => [
+            'entries' => 'assets_accounting_entries',
+            'proofs' => 'assets_accounting_proofs',
+        ],
+    ];
+    $legacyTableCheck = $connection->prepare(
+        'SELECT COUNT(*) FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name'
+    );
+    $legacyTableCheck->execute(['table_name' => 'budget_accounting_entries']);
+    $hasLegacyAccountingEntries = (int) $legacyTableCheck->fetchColumn() > 0;
+    $legacyTableCheck->execute(['table_name' => 'budget_accounting_proofs']);
+    $hasLegacyAccountingProofs = (int) $legacyTableCheck->fetchColumn() > 0;
+
+    foreach ($accountingTables as $category => $tables) {
+        if ($hasLegacyAccountingEntries) {
+            $entryMigration = $connection->prepare(
+                "INSERT IGNORE INTO `{$tables['entries']}`
+                    (id, item_name, quantity, price_per_item, total_price, note, created_by, created_at)
+                 SELECT id, item_name, quantity, price_per_item, total_price, note, created_by, created_at
+                 FROM budget_accounting_entries
+                 WHERE category_key = :category_key"
+            );
+            $entryMigration->execute(['category_key' => $category]);
+        }
+
+        if ($hasLegacyAccountingEntries && $hasLegacyAccountingProofs) {
+            $proofMigration = $connection->prepare(
+                "INSERT IGNORE INTO `{$tables['proofs']}`
+                    (id, entry_id, file_name, original_name, mime_type, file_size, created_at)
+                 SELECT proof.id, proof.entry_id, proof.file_name, proof.original_name,
+                        proof.mime_type, proof.file_size, proof.created_at
+                 FROM budget_accounting_proofs proof
+                 JOIN budget_accounting_entries entry ON entry.id = proof.entry_id
+                 WHERE entry.category_key = :category_key"
+            );
+            $proofMigration->execute(['category_key' => $category]);
+        }
+    }
+
     $columns = [
         'employee_id' => 'CHAR(6) NULL',
         'mobile' => "VARCHAR(40) NOT NULL DEFAULT ''",

@@ -478,11 +478,6 @@ export default function SupportTicketsPage({ user }) {
                   : isSubEditor
                     ? 'Employee support requests will appear here when they are submitted.'
                     : 'Something not working as expected? Send our team a support ticket and we’ll take a look.'}</p>
-              {!isSubEditor && !isLoading && (
-                <button type="button" className="support-primary-button" onClick={() => setShowNewTicket(true)}>
-                  <Icon name="plus" size={17} /> Create a support ticket
-                </button>
-              )}
               <div className="support-conversation-footnote"><Icon name="clock" size={15} /> Replies and updates stay attached to your ticket.</div>
             </div>
           )}

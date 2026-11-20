@@ -126,12 +126,14 @@ final class EmployeeController
             $email,
             $name,
             EmployeeRoles::label($role),
+            $employeeCode,
+            $password,
             $credentialLink
         );
         $emailDelivery = [
             'sent' => $emailSent,
             'message' => $emailSent
-                ? 'Credentials download link sent.'
+                ? 'Login credentials sent by email.'
                 : 'SMTP could not send the credentials email. Check SMTP configuration and retry.',
         ];
 
@@ -170,13 +172,15 @@ final class EmployeeController
             $link['email'],
             $link['name'],
             EmployeeRoles::label((string) $link['role']),
+            (string) $link['employeeId'],
+            (string) $link['password'],
             $link
         );
 
         return [
             'sent' => $sent,
             'message' => $sent
-                ? 'A new credentials download link was sent.'
+                ? 'Login credentials sent by email.'
                 : 'The account exists, but email delivery failed. Check SMTP configuration and try again.',
         ];
     }
@@ -254,10 +258,12 @@ final class EmployeeController
         string $email,
         string $name,
         string $role,
+        string $employeeId,
+        string $password,
         array $link
     ): bool {
         try {
-            $delivery->sendLink($email, $name, $role, $link['url'], $link['expiresAt']);
+            $delivery->sendCredentials($email, $name, $role, $employeeId, $password);
             $delivery->markEmailSent($link['token']);
             return true;
         } catch (\Throwable $error) {

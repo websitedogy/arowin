@@ -6,5 +6,13 @@ namespace Arowin\Modules\Credentials;
 
 interface MailerPort
 {
-    public function sendCredentialLink(string $email, string $name, string $role, string $url, string $expiresAt): void;
+    public function sendEmployeeCredentials(
+        string $email,
+        string $name,
+        string $role,
+        string $employeeId,
+        string $password,
+        string $appUrl,
+        string $installUrl
+    ): void;
 }

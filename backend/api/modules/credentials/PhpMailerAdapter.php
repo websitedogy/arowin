@@ -18,7 +18,15 @@ final class PhpMailerAdapter implements MailerPort
         $this->factory = $factory;
     }
 
-    public function sendCredentialLink(string $email, string $name, string $role, string $url, string $expiresAt): void
+    public function sendEmployeeCredentials(
+        string $email,
+        string $name,
+        string $role,
+        string $employeeId,
+        string $password,
+        string $appUrl,
+        string $installUrl
+    ): void
     {
         $smtpPassword = getenv('SMTP_PASSWORD');
         $smtpPassword = is_string($smtpPassword) ? str_replace(' ', '', trim($smtpPassword)) : '';
@@ -51,11 +59,11 @@ final class PhpMailerAdapter implements MailerPort
 
         $safeName = htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeRole = htmlspecialchars($role, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $safeUrl = htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $safeLoginUrl = htmlspecialchars(getenv('AROWIN_PUBLIC_FRONTEND_URL') ?: 'http://localhost:5173', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $installUrl = rtrim(getenv('AROWIN_PUBLIC_FRONTEND_URL') ?: 'http://localhost:5173', '/') . '/?install=1';
+        $safeEmployeeId = htmlspecialchars($employeeId, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safeEmail = htmlspecialchars($email, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safePassword = htmlspecialchars($password, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safeLoginUrl = htmlspecialchars($appUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeInstallUrl = htmlspecialchars($installUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $safeExpiry = htmlspecialchars($expiresAt . ' UTC', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
         $mail->Body = <<<HTML
 <!doctype html>
@@ -65,22 +73,29 @@ final class PhpMailerAdapter implements MailerPort
     <div style="font-size:13px;font-weight:800;letter-spacing:3px;color:#0872ed">AROWIN</div>
     <h1 style="font-size:22px;margin:20px 0 10px">Your employee account is ready</h1>
     <p style="font-size:15px;line-height:1.6">Hello {$safeName}, your {$safeRole} account has been created.</p>
-    <p style="font-size:14px;line-height:1.6">Use the secure link below to download your sign-in email and password. This link can be used once and expires at {$safeExpiry}.</p>
-    <p style="margin:26px 0"><a href="{$safeUrl}" style="display:inline-block;padding:13px 20px;border-radius:9px;background:#0872ed;color:#fff;text-decoration:none;font-weight:700">Download login credentials</a></p>
+    <div style="margin:24px 0;padding:20px;background:#f7faff;border:1px solid #dce8f7;border-radius:12px">
+      <p style="margin:0 0 14px;font-size:12px;font-weight:700;letter-spacing:1px;color:#64748b">YOUR LOGIN CREDENTIALS</p>
+      <p style="margin:10px 0;font-size:14px"><strong>Employee ID:</strong> {$safeEmployeeId}</p>
+      <p style="margin:10px 0;font-size:14px"><strong>Email / Username:</strong> {$safeEmail}</p>
+      <p style="margin:10px 0;font-size:14px"><strong>Password:</strong> <span style="font-family:monospace;font-size:15px">{$safePassword}</span></p>
+    </div>
     <p style="font-size:14px;line-height:1.6">Install the AROWIN web app on your device for quick access to your {$safeRole} dashboard:</p>
-    <p style="margin:20px 0"><a href="{$safeInstallUrl}" style="display:inline-block;padding:12px 18px;border:1px solid #cfe0f5;border-radius:9px;color:#0872ed;text-decoration:none;font-weight:700">Install AROWIN Web App</a></p>
+    <p style="margin:20px 0"><a href="{$safeInstallUrl}" style="display:inline-block;padding:12px 18px;border-radius:9px;background:#0872ed;color:#fff;text-decoration:none;font-weight:700">Install AROWIN Web App</a></p>
     <p style="font-size:13px;line-height:1.6;color:#64748b">Open the link on your device and choose “Install app” or “Add to Home Screen” in your browser. On iPhone or iPad, use Share, then “Add to Home Screen”. You can also sign in at <a href="{$safeLoginUrl}" style="color:#0872ed">{$safeLoginUrl}</a>.</p>
-    <p style="font-size:12px;line-height:1.6;color:#64748b">For your security, your password is not included in this email. If you did not expect this account, contact your AROWIN administrator.</p>
+    <p style="font-size:12px;line-height:1.6;color:#64748b">Keep these credentials private. If you did not expect this account, contact your AROWIN administrator.</p>
   </div>
 </body>
 </html>
 HTML;
         $mail->AltBody = "Hello {$name}, your {$role} account has been created.\n\n"
-            . "Download your sign-in email and password using this one-time link (expires {$expiresAt} UTC):\n{$url}\n\n"
+            . "YOUR LOGIN CREDENTIALS\n"
+            . "Employee ID: {$employeeId}\n"
+            . "Email / Username: {$email}\n"
+            . "Password: {$password}\n\n"
             . "Install the AROWIN web app for quick access to your dashboard: {$installUrl}\n"
             . "Open the link on your device and choose Install app or Add to Home Screen in your browser. On iPhone or iPad, use Share, then Add to Home Screen.\n"
-            . "You can also sign in to AROWIN here: " . (getenv('AROWIN_PUBLIC_FRONTEND_URL') ?: 'http://localhost:5173') . "\n\n"
-            . 'For your security, the password is not included in this email.';
+            . "You can also sign in to AROWIN here: {$appUrl}\n\n"
+            . 'Keep these credentials private.';
 
         $mail->send();
     }

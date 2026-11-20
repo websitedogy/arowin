@@ -249,7 +249,7 @@ export default function SubEditorDashboard({
             {deliveryNotice && (
               <div className={`dashboard-delivery-notice${deliveryNotice.sent ? ' is-sent' : ' is-failed'}`} role={deliveryNotice.sent ? 'status' : 'alert'}>
                 <span>{deliveryNotice.sent
-                  ? `Employee ID ${deliveryNotice.employeeCode} created. Credentials download link sent to ${deliveryNotice.email}.`
+                  ? `Employee ID ${deliveryNotice.employeeCode} created. Login credentials sent to ${deliveryNotice.email}.`
                   : `Employee ID ${deliveryNotice.employeeCode} created. Account email to ${deliveryNotice.email} was not sent. ${deliveryNotice.message}`}</span>
                 {!deliveryNotice.sent && (
                   <button type="button" onClick={resendCredentials} disabled={isResendingCredentials}>

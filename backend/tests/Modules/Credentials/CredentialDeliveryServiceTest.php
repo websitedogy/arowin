@@ -121,9 +121,17 @@ final class CredentialDeliveryServiceTest extends TestCase
         $mailer = new class implements MailerPort {
             public array $sent = [];
 
-            public function sendCredentialLink(string $email, string $name, string $role, string $url, string $expiresAt): void
+            public function sendEmployeeCredentials(
+                string $email,
+                string $name,
+                string $role,
+                string $employeeId,
+                string $password,
+                string $appUrl,
+                string $installUrl
+            ): void
             {
-                $this->sent[] = compact('email', 'name', 'role', 'url', 'expiresAt');
+                $this->sent[] = compact('email', 'name', 'role', 'employeeId', 'password', 'appUrl', 'installUrl');
             }
         };
         $encryption = new class implements EncryptionPort {
@@ -150,6 +158,16 @@ final class CredentialDeliveryServiceTest extends TestCase
         $this->assertSame('https://app.example.test/credentials/' . $prepared['token'], $prepared['url']);
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', hash('sha256', $prepared['token']));
         $this->assertSame('S3cret!Pass', $encryption->decrypt($repository->records[0]['encryptedPassword']));
+        $service->sendCredentials('alice@example.com', 'Alice Employee', 'Telecaller', 'EMP-102', 'S3cret!Pass');
+        $this->assertSame([
+            'email' => 'alice@example.com',
+            'name' => 'Alice Employee',
+            'role' => 'Telecaller',
+            'employeeId' => 'EMP-102',
+            'password' => 'S3cret!Pass',
+            'appUrl' => 'https://app.example.test',
+            'installUrl' => 'https://app.example.test/?install=1',
+        ], $mailer->sent[0]);
 
         $inspection = $service->inspect($prepared['token']);
         $this->assertSame('Alice Employee', $inspection['name']);
@@ -166,7 +184,7 @@ final class CredentialDeliveryServiceTest extends TestCase
         $service->inspect($prepared['token']);
     }
 
-    public function testResendRotatesLatestCredentialLink(): void
+    public function testResendRotatesCredentialAndReturnsPasswordForEmail(): void
     {
         $database = new PDO('sqlite::memory:');
         $repository = new class implements CredentialRepository {
@@ -177,7 +195,7 @@ final class CredentialDeliveryServiceTest extends TestCase
                 $this->records[] = [
                     'userId' => $userId,
                     'tokenHash' => $tokenHash,
-                    'encryptedPassword' => $encryptedPassword,
+                    'encryptedPassword' => base64_encode('S3cret!Pass'),
                     'expiresAt' => $expiresAt,
                     'redeemedAt' => null,
                     'name' => 'Alice Employee',
@@ -214,6 +232,8 @@ final class CredentialDeliveryServiceTest extends TestCase
                             'email' => $record['email'],
                             'name' => $record['name'],
                             'role' => $record['role'],
+                            'employeeId' => 'EMP-102',
+                            'encryptedPassword' => $record['encryptedPassword'],
                         ];
                     }
                 }
@@ -230,8 +250,15 @@ final class CredentialDeliveryServiceTest extends TestCase
             }
         };
         $mailer = new class implements MailerPort {
-            public function sendCredentialLink(string $email, string $name, string $role, string $url, string $expiresAt): void
-            {
+            public function sendEmployeeCredentials(
+                string $email,
+                string $name,
+                string $role,
+                string $employeeId,
+                string $password,
+                string $appUrl,
+                string $installUrl
+            ): void {
             }
         };
         $encryption = new class implements EncryptionPort {
@@ -258,5 +285,7 @@ final class CredentialDeliveryServiceTest extends TestCase
         $this->assertSame('https://app.example.test/credentials/' . $resend['token'], $resend['url']);
         $this->assertSame('Alice Employee', $resend['name']);
         $this->assertSame('alice@example.com', $resend['email']);
+        $this->assertSame('EMP-102', $resend['employeeId']);
+        $this->assertSame('S3cret!Pass', $resend['password']);
     }
 }

@@ -70,7 +70,7 @@ final class PdoCredentialRepository implements CredentialRepository
         $this->database->beginTransaction();
         try {
             $statement = $this->database->prepare(
-                'SELECT cd.id, cd.encrypted_password, u.email, u.name, u.role
+                'SELECT cd.id, cd.encrypted_password, u.employee_id, u.email, u.name, u.role
                  FROM credential_downloads cd
                  INNER JOIN users u ON u.id = cd.user_id
                  WHERE cd.user_id = :user_id
@@ -106,6 +106,8 @@ final class PdoCredentialRepository implements CredentialRepository
                 'email' => $record['email'],
                 'name' => $record['name'],
                 'role' => $record['role'],
+                'employeeId' => $record['employee_id'],
+                'encryptedPassword' => $record['encrypted_password'],
             ];
         } catch (\Throwable $error) {
             if ($this->database->inTransaction()) {

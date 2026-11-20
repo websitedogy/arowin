@@ -50,9 +50,23 @@ final class CredentialDeliveryService
         ];
     }
 
-    public function sendLink(string $email, string $name, string $role, string $url, string $expiresAt): void
-    {
-        $this->mailer->sendCredentialLink($email, $name, $role, $url, $expiresAt);
+    public function sendCredentials(
+        string $email,
+        string $name,
+        string $role,
+        string $employeeId,
+        string $password
+    ): void {
+        $appUrl = rtrim($this->frontendUrlProvider->url(), '/');
+        $this->mailer->sendEmployeeCredentials(
+            $email,
+            $name,
+            $role,
+            $employeeId,
+            $password,
+            $appUrl,
+            $appUrl . '/?install=1'
+        );
     }
 
     public function markEmailSent(string $token): void
@@ -74,6 +88,8 @@ final class CredentialDeliveryService
             'email' => $record['email'],
             'name' => $record['name'],
             'role' => $record['role'],
+            'employeeId' => $record['employeeId'],
+            'password' => $this->encryption->decrypt((string) $record['encryptedPassword']),
         ];
     }
 

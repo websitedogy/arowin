@@ -7,4 +7,6 @@ namespace Arowin;
 interface FrontendUrlProvider
 {
     public function url(): string;
+
+    public function urlForRole(string $role): string;
 }

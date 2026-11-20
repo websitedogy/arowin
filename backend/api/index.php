@@ -30,7 +30,7 @@ use Arowin\Shared\AppTime;
 
 $allowedOrigins = array_filter(array_map(
     'trim',
-    explode(',', getenv('AROWIN_FRONTEND_ORIGINS') ?: 'http://localhost:5173,http://127.0.0.1:5173')
+    explode(',', getenv('AROWIN_FRONTEND_ORIGINS') ?: 'http://localhost:5173,http://127.0.0.1:5173,https://subeditor.arowinglobal.com,https://telecaller.arowinglobal.com,https://teamlead.arowinglobal.com')
 ));
 $requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
 

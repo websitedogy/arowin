@@ -56,8 +56,14 @@ try {
 }
 $env:SMTP_ENCRYPTION = "tls"
 $env:AROWIN_PUBLIC_FRONTEND_URL = "https://your-public-arowin-site.example"
+# Optional overrides for the production employee email links:
+$env:AROWIN_PUBLIC_FRONTEND_URL_SUB_EDITOR = "https://subeditor.arowinglobal.com"
+$env:AROWIN_PUBLIC_FRONTEND_URL_TELECALLER = "https://telecaller.arowinglobal.com"
+$env:AROWIN_PUBLIC_FRONTEND_URL_TEAM_LEADER = "https://teamlead.arowinglobal.com"
 C:\xampp\php\php.exe backend\api\setup.php
 ```
+
+Employee emails use the role-specific URLs above by default. Keep `AROWIN_FRONTEND_ORIGINS` set to the frontend origins allowed to call the API; the three production employee origins are included in the default allowlist.
 
 Generate a key once and store it in `backend\.env` (do not commit the file):
 

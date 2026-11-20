@@ -150,6 +150,11 @@ final class CredentialDeliveryServiceTest extends TestCase
             {
                 return 'https://app.example.test';
             }
+
+            public function urlForRole(string $role): string
+            {
+                return 'https://app.example.test';
+            }
         };
 
         $service = new CredentialDeliveryService($database, $repository, $mailer, $encryption, $frontend);
@@ -276,6 +281,11 @@ final class CredentialDeliveryServiceTest extends TestCase
         $repository->insertRecord(7, hash('sha256', 'old-token'), 'encrypted-password', gmdate('Y-m-d H:i:s', time() + 86400));
         $service = new CredentialDeliveryService($database, $repository, $mailer, $encryption, new class implements FrontendUrlProvider {
             public function url(): string
+            {
+                return 'https://app.example.test';
+            }
+
+            public function urlForRole(string $role): string
             {
                 return 'https://app.example.test';
             }

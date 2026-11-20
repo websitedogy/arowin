@@ -57,7 +57,7 @@ final class CredentialDeliveryService
         string $employeeId,
         string $password
     ): void {
-        $appUrl = rtrim($this->frontendUrlProvider->url(), '/');
+        $appUrl = rtrim($this->frontendUrlProvider->urlForRole($role), '/');
         $this->mailer->sendEmployeeCredentials(
             $email,
             $name,
